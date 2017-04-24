@@ -21,6 +21,7 @@ import System            (exitWith, getArgs)
 import Rewriting.Files   (showQName)
 import PropertyUsage
 import ToAgda
+import ToCoq
 import VerifyOptions
 
 -- to use the determinism analysis:
@@ -94,6 +95,7 @@ generateTheorem opts qpropname = do
     putStrLn $ unwords (map (showQName . typeName) alltypes)
   case optTarget opts of
     "agda" -> theoremToAgda newopts qpropname allfuncs alltypes
+    "coq"   -> theoremToCoq   newopts qpropname allfuncs alltypes
     t      -> error $ "Unknown translation target: " ++ t
 
 -------------------------------------------------------------------------

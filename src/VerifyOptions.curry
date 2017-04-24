@@ -99,7 +99,7 @@ options =
                      else error "Illegal verbosity level (try `-h' for help)"
 
   checkTarget s opts =
-    if map toLower s `elem` ["agda"]
+    if map toLower s `elem` ["agda", "coq"]
      then opts { optTarget = map toLower s }
      else error $ "Illegal target `" ++ s ++ "' (try `-h' for help)"
 
