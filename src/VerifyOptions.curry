@@ -48,6 +48,21 @@ defaultOptions  = Options
   , patInfos    = emptyProgInfo
   }
 
+-- Default command line options.
+defaultOptionsCoq :: Options
+defaultOptionsCoq  = Options
+  { optHelp     = False
+  , optVerb     = 1
+  , optStore    = True
+  , optTarget   = "coq"
+  , optScheme   = "choice"
+  , optTheorems = []
+  , isPrimFunc  = isUntranslatedFunc
+  , primTypes   = defPrimTypes
+  , detInfos    = emptyProgInfo
+  , patInfos    = emptyProgInfo
+  }
+
 -- Primitive functions that are not extracted and translated to the verifier.
 -- In the future, it might be necessary to parameterize it w.r.t. the
 -- target verifier.

@@ -7,10 +7,11 @@
 
 module ToVerifier where
 
-import AbstractCurry.Types
-import AbstractCurry.Files
-import AbstractCurry.Select
-import AbstractCurry.Transform
+import FlatCurry.Types
+import FlatCurry.Files
+import Select
+import AbstractCurry.Types(pre)
+import Transform
 import Distribution      (stripCurrySuffix)
 import GetOpt
 import List
@@ -60,7 +61,7 @@ main = do
 -- Generate a file for each theorem found in a module.
 generateTheoremsForModule :: Options -> String -> IO ()
 generateTheoremsForModule opts mname = do
-  prog <- readCurry mname
+  prog <- readFlatCurry mname
   let propNames = map funcName (filter isProperty (functions prog))
       optNames  = nub (filter (\ (mn,_) -> null mn || mn == progName prog)
                               (optTheorems opts))
@@ -93,16 +94,21 @@ generateTheorem opts qpropname = do
     putStrLn $ unwords (map (showQName . funcName) allfuncs)
     putStrLn $ "Involved types:"
     putStrLn $ unwords (map (showQName . typeName) alltypes)
+
+  writeFile "newopts" $ show newopts
+  writeFile "qpropname" $ show qpropname
+  writeFile "allfuncs" $ show allfuncs
+  writeFile "alltypes" $ show alltypes
   case optTarget opts of
-    "agda" -> theoremToAgda newopts qpropname allfuncs alltypes
-    "coq"   -> theoremToCoq   newopts qpropname allfuncs alltypes
+    --"agda" -> theoremToAgda newopts qpropname allfuncs alltypes
+    --"coq"  -> theoremToCoq  newopts qpropname allfuncs alltypes
     t      -> error $ "Unknown translation target: " ++ t
 
 -------------------------------------------------------------------------
 --- Extract all type declarations that are refererred in the types
 --- of the given functions.
-getAllTypeDecls :: Options -> [CurryProg] -> [QName] -> [CTypeDecl]
-               -> IO [CTypeDecl]
+getAllTypeDecls :: Options -> [Prog] -> [QName] -> [TypeDecl]
+               -> IO [TypeDecl]
 getAllTypeDecls _ _ [] currtypes = return (sortTypeDecls currtypes)
 getAllTypeDecls opts currmods (tc:tcs) currtypes
   | tc `elem` primTypes opts ++ map typeName currtypes
@@ -120,23 +126,22 @@ getAllTypeDecls opts currmods (tc:tcs) currtypes
   = do let mname = fst tc
        when (optVerb opts > 0) $
          putStrLn $ "Loading module '" ++ mname ++ "'..."
-       newmod <- readCurry mname
+       newmod <- readFlatCurry mname
        getAllTypeDecls opts (newmod:currmods) (tc:tcs) currtypes
 
 -- Sort the type declarations according to their dependencies.
-sortTypeDecls :: [CTypeDecl] -> [CTypeDecl]
+sortTypeDecls :: [TypeDecl] -> [TypeDecl]
 sortTypeDecls tdecls = concat (scc definedBy usedIn tdecls)
  where
   definedBy tdecl = [typeName tdecl]
-  usedIn (CType    _ _ _ cdecls) = nub (concatMap typesOfConsDecl cdecls)
-  usedIn (CTypeSyn _ _ _ texp)   = nub (typesOfTypeExpr texp)
-  usedIn (CNewType _ _ _ cdecl)  = nub (typesOfConsDecl cdecl)
+  usedIn (Type    _ _ _ cdecls) = nub (concatMap typesOfConsDecl cdecls)
+  usedIn (TypeSyn _ _ _ texp)   = nub (typesOfTypeExpr texp)
 
 -------------------------------------------------------------------------
 
 --- Extract all functions that might be called by a given function.
-getAllFunctions :: Options -> [CFuncDecl] -> [CurryProg] -> [QName]
-                -> IO (Options, [CurryProg], [CFuncDecl])
+getAllFunctions :: Options -> [FuncDecl] -> [Prog] -> [QName]
+                -> IO (Options, [Prog], [FuncDecl])
 getAllFunctions opts currfuncs currmods [] = return (opts, currmods, currfuncs)
 getAllFunctions opts currfuncs currmods (newfun:newfuncs)
   | newfun `elem` standardConstructors ++ map funcName currfuncs
@@ -149,9 +154,7 @@ getAllFunctions opts currfuncs currmods (newfun:newfuncs)
        (-- if we don't find the qname, it must be a constructor:
         getAllFunctions opts currfuncs currmods newfuncs)
       (\fdecl -> getAllFunctions opts
-                    (if null (funcRules fdecl)
-                      then currfuncs -- ignore external functions
-                      else fdecl : currfuncs)
+                      (fdecl : currfuncs)
                     currmods (newfuncs ++ nub (funcsOfCFuncDecl fdecl)))
       (find (\fd -> funcName fd == newfun)
             (functions
@@ -160,7 +163,7 @@ getAllFunctions opts currfuncs currmods (newfun:newfuncs)
   = do let mname = fst newfun
        when (optVerb opts > 0) $
          putStrLn $ "Loading module '" ++ mname ++ "'..."
-       newmod <- readCurry mname
+       newmod <- readFlatCurry mname
        when (optVerb opts > 0) $
          putStrLn $ "Analyzing module '" ++ mname ++ "'..."
        pdetinfo <- analyzeGeneric nondetAnalysis mname
