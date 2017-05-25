@@ -9,9 +9,10 @@ module ToVerifier where
 
 import FlatCurry.Types
 import FlatCurry.Files
-import Select
+import FlatCurry.Select (functions, tconsOfType, types)
 import AbstractCurry.Types(pre)
-import Transform
+import FlatCurry.Transform
+import FlatCurry.Goodies
 import Distribution      (stripCurrySuffix)
 import GetOpt
 import List
@@ -95,13 +96,14 @@ generateTheorem opts qpropname = do
     putStrLn $ "Involved types:"
     putStrLn $ unwords (map (showQName . typeName) alltypes)
 
+  writeFile "alltypenames" $ show alltypenames
   writeFile "newopts" $ show newopts
   writeFile "qpropname" $ show qpropname
   writeFile "allfuncs" $ show allfuncs
   writeFile "alltypes" $ show alltypes
   case optTarget opts of
     --"agda" -> theoremToAgda newopts qpropname allfuncs alltypes
-    --"coq"  -> theoremToCoq  newopts qpropname allfuncs alltypes
+    "coq"  -> theoremToCoq  newopts qpropname allfuncs alltypes
     t      -> error $ "Unknown translation target: " ++ t
 
 -------------------------------------------------------------------------
