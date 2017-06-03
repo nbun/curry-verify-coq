@@ -7,7 +7,7 @@
 --- @category meta
 ------------------------------------------------------------------------
 
-module Select
+module FlatCurry.Select
   ( progName, imports, functions, constructors, types, publicFuncNames
   , publicConsNames, publicTypeNames
 

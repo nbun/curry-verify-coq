@@ -12,10 +12,10 @@
 --- @category meta
 ----------------------------------------------------------------------------
 
-module Transform where
+module FlatCurry.Transform where
 
 import FlatCurry.Types
-import Select
+-- import FlatCurry.Goodies
 import List (nub, union)
 
 --- This type synonym is useful to denote the type of an update,
