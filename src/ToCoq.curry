@@ -4,12 +4,13 @@
 --- @author Michael Hanus
 --- @version August 2016
 -------------------------------------------------------------------------
-module ToCoq where -- (theoremToCoq) where
+module ToCoq (theoremToCoq) where
 
 import FlatCurry.Types
 import FlatCurry.Show
 
 import List
+import Maybe
 import Debug
 
 import VerifyOptions
@@ -34,9 +35,10 @@ theoremToCoq _ (_,theoname) allfuncs alltypes = do
 
 showProg :: Prog -> String
 showProg (Prog _ _ typedecls functions _) =
-  let typedeclStr = unlines $ map (showTypeDecl True) typedecls
+  let header = unlines $ ["Set Implicit Arguments."]
+      typedeclStr = unlines $ map (showTypeDecl False) typedecls
       functionStr = unlines $ map (showFuncDecl) functions
-   in typedeclStr ++ "\n" ++  functionStr
+   in header ++ typedeclStr ++ "\n" ++  functionStr
 
 (+-+) :: String -> String -> String
 s +-+ t = case (s,t) of
@@ -220,13 +222,34 @@ showTypeDecl imp (Type qn _ tvars cdecls) =
       lhs       = "Inductive " ++ showQName qn ++ tvarStr' ++ " :=\n"
       tvarexprs = map TVar tvars
       rhs       = unlines $ map (showConsDecl (TCons qn tvarexprs)) cdecls
-   in lhs ++ init rhs ++ "."
+      iArgDecls = unlines $ mapMaybe (implArgStr tvars) cdecls
+   in lhs ++ init rhs ++ ".\n" ++ iArgDecls
 showTypeDecl _ (TypeSyn _ _ _ _) =
   error "TypeSyn not yet supported"
 
 showConsDecl :: TypeExpr -> ConsDecl -> String
 showConsDecl datatype (Cons qn _ _ typeexprs) =
   "| " ++ showQName qn ++ " : " ++ typeListFunType (typeexprs ++ [datatype])
+
+implArgStr :: [TVarIndex] -> ConsDecl -> Maybe String
+implArgStr tis cdecl@(Cons qn _ _ tyexprs) = if null missing
+                                               then Nothing else Just argStr
+  where missing = missingTVars tis cdecl
+        argStr  = "Arguments" +-+ showQName qn
+                  +-+ unwords (map (\i -> "{_}") tis) ++ "."
+
+showConsArg :: TypeExpr -> String
+showConsArg tyexpr = case tyexpr of
+                       TVar _ -> "{_}"
+                       _      -> "_"
+
+tyVarId :: TypeExpr -> Maybe TVarIndex
+tyVarId tyexpr = case tyexpr of
+                   TVar i -> Just i
+                   _      -> Nothing
+
+missingTVars :: [TVarIndex] -> ConsDecl -> [TVarIndex]
+missingTVars tis (Cons _ _ _ tyexprs) = tis \\ mapMaybe tyVarId tyexprs
 
 typeListFunType :: [TypeExpr] -> String
 typeListFunType tys = case tys of
