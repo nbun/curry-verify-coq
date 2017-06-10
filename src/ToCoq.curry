@@ -4,7 +4,7 @@
 --- @author Michael Hanus
 --- @version August 2016
 -------------------------------------------------------------------------
-module ToCoq (theoremToCoq) where
+module ToCoq where -- (theoremToCoq) where
 
 import FlatCurry.Types
 import FlatCurry.Show
@@ -82,7 +82,7 @@ showFuncDecl fdecl = case isProp fdecl of
                        False -> showFun  fdecl
 
 showFun :: FuncDecl -> String
-showFun (Func qn _ _ tyexpr rule) =
+showFun f@(Func qn _ _ tyexpr rule) =
   let (dtys, rty) = funcTyList tyexpr
       tyvars  = nub $ tyVarsOfTyExpr tyexpr
       vars    = varsOfRule rule
@@ -92,17 +92,26 @@ showFun (Func qn _ _ tyexpr rule) =
       tvarStr' = if null tyvars
                     then ""
                     else " " ++ implicit False (tvarStr ++ " : Type")
-      funhead = "Definition" +-+ showQName qn +-+ tvarStr' +-+ argStr +-+ ":" 
+      funkind = if isRecFun f then "Fixpoint" else "Definition"
+      funhead = funkind +-+ showQName qn +-+ tvarStr' +-+ argStr +-+ ":" 
                 +-+ showTypeExpr rty +-+ ":=\n"
       funbody = showRule rule
    in funhead ++ funbody
 
 isRecFun :: FuncDecl -> Bool
-isRecFun (Func _ _ _ _ rule) = isRecRule rule
+isRecFun (Func fqn _ _ _ rule)  = isRecRule rule
   where isRecRule (Rule _ expr) = isRecExpr expr
-        isRecRule _             = False
+        isRecRule (External _)  = False
 
-        isRecExpr _ = False -- TODO fix this
+        isRecExpr (Var _)        = False
+        isRecExpr (Lit _)        = False
+        isRecExpr (Comb _ qn es) = fqn == qn || or (map isRecExpr es)
+        isRecExpr (Let binds e)  = isRecExpr e || or (map (isRecExpr . snd) binds)
+        isRecExpr (Free _ e)     = isRecExpr e
+        isRecExpr (Or e1 e2)     = isRecExpr e1 || isRecExpr e2
+        isRecExpr (Case _ e brs) = isRecExpr e || or (map isRecBranch brs)
+
+        isRecBranch (Branch _ e) = isRecExpr e
 
 showFunArg :: (VarIndex, TypeExpr) -> String
 showFunArg (i, tyexpr) = "(" ++ showVarIndex i +-+
