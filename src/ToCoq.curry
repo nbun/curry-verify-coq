@@ -17,17 +17,16 @@ import VerifyOptions
 import VerifyPackageConfig ( packagePath )
 
 
-e1 :: IO ()
-e1 = putStrLn $ showProg (Prog "" [] [(Type ("Test","Colour") Public [] [(Cons ("Test","Red") 0 Public []),(Cons ("Test","Blue") 0 Public []),(Cons ("Test","Green") 0 Public [])])] [(Func ("Test","isRed") 1 Public (FuncType (TCons ("Test","Colour") []) (TCons ("Prelude","Bool") [])) (Rule [1] (Case Flex (Var 1) [(Branch (Pattern ("Test","Red") []) (Comb ConsCall ("Prelude","True") [])),(Branch (Pattern ("Test","Blue") []) (Comb ConsCall ("Prelude","False") []))]))),(Func ("Test","check") 3 Public (FuncType (FuncType (TCons ("Test","Colour") []) (TCons ("Prelude","Bool") [])) (FuncType (TCons ("Test","Colour") []) (FuncType (TCons ("Test","Colour") []) (TCons ("Prelude","Bool") [])))) (Rule [1,2,3] (Comb FuncCall ("Prelude","apply") [(Var 1),(Var 2)]))),(Func ("Prelude","apply") 2 Public (FuncType (FuncType (TVar 0) (TVar 1)) (FuncType (TVar 0) (TVar 1))) (External "Prelude.apply")),(Func ("Test","dummy") 1 Public (FuncType (TCons ("Test","Colour") []) (TCons ("Test.Prop","Prop") [])) (Rule [1] (Comb FuncCall ("Prelude","apply") [(Comb FuncCall ("Test.Prop","always") []),(Comb FuncCall ("Test","check") [(Comb (FuncPartCall 1) ("Test","isRed") []),(Var 1),(Var 1)])])))] [])
+t1 :: IO ()
+t1 = putStrLn $ showProg (Prog "" [] [(Type ("Test","Colour") Public [] [(Cons ("Test","Red") 0 Public []),(Cons ("Test","Blue") 0 Public []),(Cons ("Test","Green") 0 Public [])])] [(Func ("Test","isRed") 1 Public (FuncType (TCons ("Test","Colour") []) (TCons ("Prelude","Bool") [])) (Rule [1] (Case Flex (Var 1) [(Branch (Pattern ("Test","Red") []) (Comb ConsCall ("Prelude","True") [])),(Branch (Pattern ("Test","Blue") []) (Comb ConsCall ("Prelude","False") []))]))),(Func ("Test","check") 3 Public (FuncType (FuncType (TCons ("Test","Colour") []) (TCons ("Prelude","Bool") [])) (FuncType (TCons ("Test","Colour") []) (FuncType (TCons ("Test","Colour") []) (TCons ("Prelude","Bool") [])))) (Rule [1,2,3] (Comb FuncCall ("Prelude","apply") [(Var 1),(Var 2)]))),(Func ("Prelude","apply") 2 Public (FuncType (FuncType (TVar 0) (TVar 1)) (FuncType (TVar 0) (TVar 1))) (External "Prelude.apply")),(Func ("Test","dummy") 1 Public (FuncType (TCons ("Test","Colour") []) (TCons ("Test.Prop","Prop") [])) (Rule [1] (Comb FuncCall ("Prelude","apply") [(Comb FuncCall ("Test.Prop","always") []),(Comb FuncCall ("Test","check") [(Comb (FuncPartCall 1) ("Test","isRed") []),(Var 1),(Var 1)])])))] [])
 
-e2 :: IO ()
-e2 = putStrLn $ showProg (Prog "" [] [(Type ("Test2","MyList") Public [0] [(Cons ("Test2","Cons") 2 Public [(TVar 0),(TCons ("Test2","MyList") [(TVar 0)])]),(Cons ("Test2","Nil") 0 Public [])])] [(Func ("Test2","myMap") 2 Public (FuncType (FuncType (TVar 0) (TVar 1)) (FuncType (TCons ("Test2","MyList") [(TVar 0)]) (TCons ("Test2","MyList") [(TVar 1)]))) (Rule [1,2] (Case Flex (Var 2) [(Branch (Pattern ("Test2","Nil") []) (Comb ConsCall ("Test2","Nil") [])),(Branch (Pattern ("Test2","Cons") [3,4]) (Comb ConsCall ("Test2","Cons") [(Comb FuncCall ("Prelude","apply") [(Var 1),(Var 3)]),(Comb FuncCall ("Test2","myMap") [(Var 1),(Var 4)])]))]))),(Func ("Prelude","apply") 2 Public (FuncType (FuncType (TVar 0) (TVar 1)) (FuncType (TVar 0) (TVar 1))) (External "Prelude.apply")),(Func ("Test2","prop") 1 Public (FuncType (FuncType (TVar 0) (TVar 1)) (TCons ("Test.Prop","Prop") [])) (Rule [1] (Comb FuncCall ("Prelude","apply") [(Comb FuncCall ("Test.Prop","always") []),(Comb FuncCall ("Prelude","==") [(Comb FuncCall ("Test2","myMap") [(Var 1),(Comb ConsCall ("Test2","Nil") [])]),(Comb ConsCall ("Test2","Nil") [])])])))] [])
+t2 :: IO ()
+t2 = putStrLn $ showProg (Prog "" [] [(Type ("Test2","MyList") Public [0] [(Cons ("Test2","Cons") 2 Public [(TVar 0),(TCons ("Test2","MyList") [(TVar 0)])]),(Cons ("Test2","Nil") 0 Public [])])] [(Func ("Test2","myMap") 2 Public (FuncType (FuncType (TVar 0) (TVar 1)) (FuncType (TCons ("Test2","MyList") [(TVar 0)]) (TCons ("Test2","MyList") [(TVar 1)]))) (Rule [1,2] (Case Flex (Var 2) [(Branch (Pattern ("Test2","Nil") []) (Comb ConsCall ("Test2","Nil") [])),(Branch (Pattern ("Test2","Cons") [3,4]) (Comb ConsCall ("Test2","Cons") [(Comb FuncCall ("Prelude","apply") [(Var 1),(Var 3)]),(Comb FuncCall ("Test2","myMap") [(Var 1),(Var 4)])]))]))),(Func ("Prelude","apply") 2 Public (FuncType (FuncType (TVar 0) (TVar 1)) (FuncType (TVar 0) (TVar 1))) (External "Prelude.apply")),(Func ("Test2","prop") 1 Public (FuncType (FuncType (TVar 0) (TVar 1)) (TCons ("Test.Prop","Prop") [])) (Rule [1] (Comb FuncCall ("Prelude","apply") [(Comb FuncCall ("Test.Prop","always") []),(Comb FuncCall ("Prelude","==") [(Comb FuncCall ("Test2","myMap") [(Var 1),(Comb ConsCall ("Test2","Nil") [])]),(Comb ConsCall ("Test2","Nil") [])])])))] [])
 
 
 -------------------------------------------------------------------------
 
 theoremToCoq :: Options -> QName -> [FuncDecl] -> [TypeDecl] -> IO ()
---theoremToCoq opts qtheo@(_,theoname) allfuncs alltypes = do
 theoremToCoq _ (_,theoname) allfuncs alltypes = do
   writeFile "alltypes" $ show alltypes
   writeFile "allfuncs" $ show allfuncs
@@ -37,16 +36,33 @@ showProg :: Prog -> String
 showProg (Prog _ _ typedecls functions _) =
   let header = unlines $ ["Set Implicit Arguments."]
       typedeclStr = unlines $ map (showTypeDecl False) typedecls
-      functionStr = unlines $ map (showFuncDecl) functions
-   in header ++ typedeclStr ++ "\n" ++  functionStr
+      functionStr = unlines $ map (showFuncDecl) (filter requiredFun functions)
+   in header +||+ typedeclStr +|+ functionStr
+
+combineWith :: Bool -> Char -> String -> String -> String
+combineWith check c s t = case (s,t, check) of
+                            ("", _, _)   -> t
+                            (_, "", _)   -> s
+                            (_, _, True) -> if last s == c then (s ++ t)
+                                                           else s ++ [c] ++ t
+                            _            -> s ++ [c] ++ t
 
 (+-+) :: String -> String -> String
-s +-+ t = case (s,t) of
-            ("",_) -> t
-            (_,"") -> s
-            _      -> case last s of
-                        ' ' -> s ++ t
-                        _   -> s ++ " " ++ t
+s +-+ t = combineWith True ' ' s t
+
+(+|+) :: String -> String -> String
+s +|+ t = combineWith True '\n' s t
+
+(+||+) :: String -> String -> String
+s +||+ t = combineWith False '\n' s t
+
+terminator :: String
+terminator = ".\n"
+
+requiredFun :: FuncDecl -> Bool
+requiredFun (Func qn _ _ _ _) = case qn of
+                                  ("Prelude", "apply") -> False
+                                  _                    -> True
 
 indent :: Int -> String -> String
 indent n str = replicate n ' ' ++ str
@@ -64,7 +80,6 @@ showQName qn     = case fst qn of
                      "True"  -> "true"
                      "False" -> "false"
                      "=="    -> "="
-                     "apply" -> "TODO: filter this out"
                      s       -> error $ show s ++ "not supported yet"
 
 isInfixOp :: QName -> Bool
@@ -91,12 +106,12 @@ showFun f@(Func qn _ _ tyexpr rule) =
       tvarStr  = intersperse ' ' (concatMap showTVarIndex tyvars)
       tvarStr' = if null tyvars
                     then ""
-                    else " " ++ implicit False (tvarStr ++ " : Type")
+                    else " " ++ implicit False (tvarStr +-+ ": Type")
       funkind = if isRecFun f then "Fixpoint" else "Definition"
       funhead = funkind +-+ showQName qn +-+ tvarStr' +-+ argStr +-+ ":" 
-                +-+ showTypeExpr rty +-+ ":=\n"
+                +-+ showTypeExpr rty +-+ ":="
       funbody = showRule rule
-   in funhead ++ funbody
+   in funhead +|+ funbody
 
 isRecFun :: FuncDecl -> Bool
 isRecFun (Func fqn _ _ _ rule)  = isRecRule rule
@@ -105,11 +120,12 @@ isRecFun (Func fqn _ _ _ rule)  = isRecRule rule
 
         isRecExpr (Var _)        = False
         isRecExpr (Lit _)        = False
-        isRecExpr (Comb _ qn es) = fqn == qn || or (map isRecExpr es)
-        isRecExpr (Let binds e)  = isRecExpr e || or (map (isRecExpr . snd) binds)
+        isRecExpr (Comb _ qn es) = fqn == qn    || or (map isRecExpr es)
+        isRecExpr (Let binds e)  = isRecExpr e  || or (map (isRecExpr . snd) binds)
         isRecExpr (Free _ e)     = isRecExpr e
         isRecExpr (Or e1 e2)     = isRecExpr e1 || isRecExpr e2
-        isRecExpr (Case _ e brs) = isRecExpr e || or (map isRecBranch brs)
+        isRecExpr (Case _ e brs) = isRecExpr e  || or (map isRecBranch brs)
+        isRecExpr (Typed e _)    = isRecExpr e
 
         isRecBranch (Branch _ e) = isRecExpr e
 
@@ -118,13 +134,11 @@ showFunArg (i, tyexpr) = "(" ++ showVarIndex i +-+
                          ":" +-+ showTypeExpr tyexpr ++ ")"
 
 addDot :: [String] -> [String]
-addDot strs = init strs ++ [last strs ++ "."]
+addDot strs = init strs ++ [last strs ++ terminator]
 
 showRule :: Rule -> String
-showRule (Rule _ expr)    = unlines $ map (indent 2) (addDot $ showExpr expr)
-showRule (External name)  = case name of
-                              "Prelude.apply" -> "TODO remove this"
-                              _ -> error "External rules not supported yet"
+showRule (Rule _ expr) = unlines $ map (indent 2) (addDot $ showExpr expr)
+showRule (External _)  = error "External rules not supported yet"
 
 showExprL :: Expr -> String
 showExprL = init . unlines . showExpr
@@ -175,6 +189,7 @@ funcTyList' fty@(FuncType dom ran) =
     (FuncType f@(FuncType _ _) _) -> ([f] ++ a, b)
     (FuncType _   (FuncType _ _)) -> (x ++ a,   b)
     (FuncType _                _) -> (x,      ran)
+    _                             -> error "This should be impossible..."
   where (x,_) = funcTyList' dom
         (a,b) = funcTyList' ran
 funcTyList' tyv@(TVar _)    = ([tyv], tyv)
@@ -205,20 +220,20 @@ splitProp (Rule _ expr) =
 
 showProp :: FuncDecl -> String
 showProp (Func qn _ _ tyexpr rule) =
-  let (dtys, rty) = funcTyList tyexpr
-      tyvars   = nub $ tyVarsOfTyExpr tyexpr
-      vars     = varsOfRule rule
-      args     = zip vars dtys
-      argStr   = unwords $ map showFunArg args
-      tvarStr  = intersperse ' ' (concatMap showTVarIndex tyvars)
-      tvarStr' = if null tyvars
+  let (dtys, _) = funcTyList tyexpr
+      tyvars    = nub $ tyVarsOfTyExpr tyexpr
+      vars      = varsOfRule rule
+      args      = zip vars dtys
+      argStr    = unwords $ map showFunArg args
+      tvarStr   = intersperse ' ' (concatMap showTVarIndex tyvars)
+      tvarStr'  = if null tyvars
                     then ""
-                    else " " ++ implicit False (tvarStr ++ " : Type")
+                    else " " ++ implicit False (tvarStr +-+ ": Type")
       Just (quant, expr) = splitProp rule
       funhead = "Theorem" +-+ showQName qn +-+ ":"
-                 +-+ showQuantifier quant +-+ tvarStr' +-+ argStr ++ ",\n"
-      funbody = indent 2 $ showExprL expr ++ "."
-   in funhead ++ funbody
+                 +-+ showQuantifier quant +-+ tvarStr' +-+ argStr ++ ","
+      funbody = indent 2 $ showExprL expr ++ terminator
+   in funhead +|+ funbody
 --------------------------------------------------------------------------------
 -- TypeDecl
 
@@ -227,25 +242,25 @@ showTypeDecl imp (Type qn _ tvars cdecls) =
   let tvarStr  = intersperse ' ' (concatMap showTVarIndex tvars)
       tvarStr' = if null tvars
                     then ""
-                    else " " ++ implicit imp (tvarStr ++ " : Type")
-      lhs       = "Inductive " ++ showQName qn ++ tvarStr' ++ " :=\n"
+                    else " " ++ implicit imp (tvarStr +-+ ": Type")
+      lhs       = "Inductive" +-+ showQName qn ++ tvarStr' +-+ ":="
       tvarexprs = map TVar tvars
       rhs       = unlines $ map (showConsDecl (TCons qn tvarexprs)) cdecls
       iArgDecls = unlines $ mapMaybe (implArgStr tvars) cdecls
-   in lhs ++ init rhs ++ ".\n" ++ iArgDecls
+   in lhs +|+ init rhs ++ terminator +||+ iArgDecls
 showTypeDecl _ (TypeSyn _ _ _ _) =
   error "TypeSyn not yet supported"
 
 showConsDecl :: TypeExpr -> ConsDecl -> String
 showConsDecl datatype (Cons qn _ _ typeexprs) =
-  "| " ++ showQName qn ++ " : " ++ typeListFunType (typeexprs ++ [datatype])
+  "|" +-+ showQName qn +-+ ":" +-+ typeListFunType (typeexprs ++ [datatype])
 
 implArgStr :: [TVarIndex] -> ConsDecl -> Maybe String
-implArgStr tis cdecl@(Cons qn _ _ tyexprs) = if null missing
-                                               then Nothing else Just argStr
+implArgStr tis cdecl@(Cons qn _ _ _) = if null missing then Nothing
+                                                       else Just argStr
   where missing = missingTVars tis cdecl
         argStr  = "Arguments" +-+ showQName qn
-                  +-+ unwords (map (\i -> "{_}") tis) ++ "."
+                  +-+ unwords (map (\_ -> "{_}") tis) ++ terminator
 
 showConsArg :: TypeExpr -> String
 showConsArg tyexpr = case tyexpr of
@@ -269,7 +284,7 @@ typeListFunType tys = case tys of
 
 showTypeExpr :: TypeExpr -> String
 showTypeExpr (TVar i)           = showTVarIndex i
-showTypeExpr (FuncType dom ran) = showTypeExpr dom ++ " -> " ++ showTypeExpr ran
+showTypeExpr (FuncType dom ran) = showTypeExpr dom +-+ "->" +-+ showTypeExpr ran
 showTypeExpr (TCons qn tyexprs) = showQName qn ++ tyvarstr
   where tyvarstr = if null tyexprs then ""
                    else " " ++ concat (intersperse " " (map showTypeExpr tyexprs))
