@@ -27,21 +27,31 @@ defaultOptions = Options {indentWidth = 2}
 indent' :: Options -> Doc -> Doc
 indent' opts = indent (indentWidth opts)
 
-vvsep :: [Doc] -> Doc
-vvsep = compose (<$!$>)
+sepMap :: (a -> Doc) -> [a] -> Doc
+sepMap f = sep . map f
 
-vvsepMap :: (a -> Doc) -> [a] -> Doc
-vvsepMap f = vvsep . map f
+vsepMap :: (a -> Doc) -> [a] -> Doc
+vsepMap f = vsep . map f
+
+($~$) :: Doc -> Doc -> Doc
+d1 $~$ d2 = align $ d1 $$ d2
+
+infixl 5 $~$
+
 --------------------------------------------------------------------------------
 -- TODO:
--- * Fix indentation
+-- * Fix indentation a little more
+-- * let flattening
 -- * Handling of $
 -- * Nondeterminism
 -- * Free variables
 -- * Much more 
 
 t1 :: IO ()
-t1 = putStrLn $ showProg (Prog [] [] [(Type ("Test","Tree") Public [0] [(Cons ("Test","Leaf") 1 Public [(TVar 0)]),(Cons ("Test","Node") 2 Public [(TCons ("Test","Tree") [(TVar 0)]),(TCons ("Test","Tree") [(TVar 0)])]),(Cons ("Test","Nil") 0 Public [])])] [(Func ("Test","&") 2 Public (FuncType (TCons ("Test","Tree") [(TVar 0)]) (FuncType (TCons ("Test","Tree") [(TVar 0)]) (TCons ("Test","Tree") [(TVar 0)]))) (Rule [1,2] (Case Rigid (Comb ConsCall ("Prelude","(,)") [(Var 1),(Var 2)]) [(Branch (Pattern ("Prelude","(,)") [3,4]) (Let [(5,(Let [(6,(Comb ConsCall ("Test","Node") [(Var 3),(Var 4)]))] (Case Rigid (Var 3) [(Branch (Pattern ("Test","Nil") []) (Var 4)),(Branch (Pattern ("Test","Leaf") [7]) (Var 6)),(Branch (Pattern ("Test","Node") [8,9]) (Var 6))])))] (Case Rigid (Var 4) [(Branch (Pattern ("Test","Nil") []) (Var 3)),(Branch (Pattern ("Test","Leaf") [10]) (Var 5)),(Branch (Pattern ("Test","Node") [11,12]) (Var 5))])))]))),(Func ("Prelude","id") 1 Public (FuncType (TVar 0) (TVar 0)) (Rule [1] (Var 1))),(Func ("Test","mapTree") 2 Public (FuncType (FuncType (TVar 0) (TVar 1)) (FuncType (TCons ("Test","Tree") [(TVar 0)]) (TCons ("Test","Tree") [(TVar 1)]))) (Rule [1,2] (Case Flex (Var 2) [(Branch (Pattern ("Test","Nil") []) (Comb ConsCall ("Test","Nil") [])),(Branch (Pattern ("Test","Leaf") [3]) (Comb ConsCall ("Test","Leaf") [(Comb FuncCall ("Prelude","apply") [(Var 1),(Var 3)])])),(Branch (Pattern ("Test","Node") [4,5]) (Comb FuncCall ("Test","&") [(Comb FuncCall ("Test","mapTree") [(Var 1),(Var 4)]),(Comb FuncCall ("Test","mapTree") [(Var 1),(Var 5)])]))]))),(Func ("Prelude","apply") 2 Public (FuncType (FuncType (TVar 0) (TVar 1)) (FuncType (TVar 0) (TVar 1))) (External "Prelude.apply")),(Func ("Test","map") 1 Public (FuncType (TCons ("Test","Tree") [(TVar 0)]) (TCons ("Test.Prop","Prop") [])) (Rule [1] (Comb FuncCall ("Prelude","apply") [(Comb FuncCall ("Test.Prop","always") []),(Comb FuncCall ("Prelude","==") [(Comb FuncCall ("Test","mapTree") [(Comb (FuncPartCall 1) ("Prelude","id") []),(Var 1)]),(Var 1)])])))] [])
+t1 = do
+  let p = showProg (Prog [] [] [(Type ("Test","Tree") Public [0] [(Cons ("Test","Leaf") 1 Public [(TVar 0)]),(Cons ("Test","Node") 2 Public [(TCons ("Test","Tree") [(TVar 0)]),(TCons ("Test","Tree") [(TVar 0)])]),(Cons ("Test","Nil") 0 Public [])])] [(Func ("Test","&") 2 Public (FuncType (TCons ("Test","Tree") [(TVar 0)]) (FuncType (TCons ("Test","Tree") [(TVar 0)]) (TCons ("Test","Tree") [(TVar 0)]))) (Rule [1,2] (Case Rigid (Comb ConsCall ("Prelude","(,)") [(Var 1),(Var 2)]) [(Branch (Pattern ("Prelude","(,)") [3,4]) (Let [(5,(Let [(6,(Comb ConsCall ("Test","Node") [(Var 3),(Var 4)]))] (Case Rigid (Var 3) [(Branch (Pattern ("Test","Nil") []) (Var 4)),(Branch (Pattern ("Test","Leaf") [7]) (Var 6)),(Branch (Pattern ("Test","Node") [8,9]) (Var 6))])))] (Case Rigid (Var 4) [(Branch (Pattern ("Test","Nil") []) (Var 3)),(Branch (Pattern ("Test","Leaf") [10]) (Var 5)),(Branch (Pattern ("Test","Node") [11,12]) (Var 5))])))]))),(Func ("Prelude","id") 1 Public (FuncType (TVar 0) (TVar 0)) (Rule [1] (Var 1))),(Func ("Test","mapTree") 2 Public (FuncType (FuncType (TVar 0) (TVar 1)) (FuncType (TCons ("Test","Tree") [(TVar 0)]) (TCons ("Test","Tree") [(TVar 1)]))) (Rule [1,2] (Case Flex (Var 2) [(Branch (Pattern ("Test","Nil") []) (Comb ConsCall ("Test","Nil") [])),(Branch (Pattern ("Test","Leaf") [3]) (Comb ConsCall ("Test","Leaf") [(Comb FuncCall ("Prelude","apply") [(Var 1),(Var 3)])])),(Branch (Pattern ("Test","Node") [4,5]) (Comb FuncCall ("Test","&") [(Comb FuncCall ("Test","mapTree") [(Var 1),(Var 4)]),(Comb FuncCall ("Test","mapTree") [(Var 1),(Var 5)])]))]))),(Func ("Prelude","apply") 2 Public (FuncType (FuncType (TVar 0) (TVar 1)) (FuncType (TVar 0) (TVar 1))) (External "Prelude.apply")),(Func ("Test","map") 1 Public (FuncType (TCons ("Test","Tree") [(TVar 0)]) (TCons ("Test.Prop","Prop") [])) (Rule [1] (Comb FuncCall ("Prelude","apply") [(Comb FuncCall ("Test.Prop","always") []),(Comb FuncCall ("Prelude","==") [(Comb FuncCall ("Test","mapTree") [(Comb (FuncPartCall 1) ("Prelude","id") []),(Var 1)]),(Var 1)])])))] [])
+  writeFile "aligntest" p
+  putStrLn p
 -------------------------------------------------------------------------
 
 theoremToCoq :: Options -> QName -> [FuncDecl] -> [TypeDecl] -> IO ()
@@ -55,8 +65,9 @@ showProg :: Prog -> String
 showProg (Prog _ _ typedecls functions _) =
   let header = unlines $ ["Set Implicit Arguments."]
       typedeclStr = unlines $ map (showTypeDecl defaultOptions) typedecls
-      functionStr = ""--unlines $ map (showFuncDecl) (filter requiredFun functions)
-   in typedeclStr --header +||+ typedeclStr +|+ functionStr
+      functionStr = unlines $ map (showFuncDecl defaultOptions)
+                                  (filter requiredFun functions)
+   in header ++ typedeclStr ++ functionStr
 
 combineWith :: Bool -> Char -> String -> String -> String
 combineWith check c s t = case (s,t, check) of
@@ -102,29 +113,29 @@ isInfixOp qn = case qn of
 
 --------------------------------------------------------------------------------
 -- FuncDecl
-{-
 
-showFuncDecl :: FuncDecl -> String
-showFuncDecl fdecl = case isProp fdecl of
-                       True  -> showProp fdecl
-                       False -> showFun  fdecl
 
-showFun :: FuncDecl -> String
-showFun f@(Func qn _ _ tyexpr rule) =
+showFuncDecl :: Options -> FuncDecl -> String
+showFuncDecl o fdecl = case isProp fdecl of
+                       True  -> "no"--showProp fdecl
+                       False -> showFun o fdecl
+
+showFun :: Options -> FuncDecl -> String
+showFun o f@(Func qn _ _ tyexpr rule) =
   let (dtys, rty) = funcTyList tyexpr
       tyvars  = nub $ tyVarsOfTyExpr tyexpr
       vars    = varsOfRule rule
       args    = zip vars dtys
-      argStr  = unwords $ map showFunArg args
-      tvarStr  = intersperse ' ' (concatMap showTVarIndex tyvars)
+      argStr  = sepMap (showFunArg o) args
+      tvarStr  = sepMap showTVarIndex tyvars
       tvarStr' = if null tyvars
-                    then ""
-                    else " " ++ implicit True (tvarStr +-+ ": Type")
-      funkind = if isRecFun f then "Fixpoint" else "Definition"
-      funhead = funkind +-+ showQName qn +-+ tvarStr' +-+ argStr +-+ ":" 
-                +-+ showTypeExpr rty +-+ ":="
-      funbody = showRule rule
-   in funhead +|+ funbody
+                    then text ""
+                    else braces $ tvarStr <+> text ": Type"
+      funkind = text $ if isRecFun f then "Fixpoint" else "Definition"
+      funhead = sep [funkind, showQName qn, tvarStr', argStr, text ":",
+                     showTypeExpr o rty, text ":="]
+      funbody = indent' o $ showRule o rule
+   in pretty 80 $ funhead $$ funbody
 
 isRecFun :: FuncDecl -> Bool
 isRecFun (Func fqn _ _ _ rule)  = isRecRule rule
@@ -142,56 +153,54 @@ isRecFun (Func fqn _ _ _ rule)  = isRecRule rule
 
         isRecBranch (Branch _ e) = isRecExpr e
 
-showFunArg :: (VarIndex, TypeExpr) -> String
-showFunArg (i, tyexpr) = "(" ++ showVarIndex i +-+
-                         ":" +-+ showTypeExpr tyexpr ++ ")"
+showFunArg :: Options -> (VarIndex, TypeExpr) -> Doc
+showFunArg o (i, tyexpr) = parens $
+  sep [showVarIndex i, text ":", showTypeExpr o tyexpr]
 
-addDot :: [String] -> [String]
-addDot strs = init strs ++ [last strs ++ terminator]
+showRule :: Options -> Rule -> Doc
+showRule o (Rule _ expr) = showExpr o expr <> terminator
+showRule _ (External s)  = error$ "External function " ++ s ++ " not supported yet"
 
-showRule :: Rule -> String
-showRule (Rule _ expr) = unlines $ map (indent 2) (addDot $ showExpr expr)
-showRule (External s)  = error  $ "External function" +-+ s +-+ "not supported yet"
-
-showExprL :: Expr -> String
-showExprL = init . unlines . showExpr
-
-showExpr :: Expr -> [String]
-showExpr (Var i) = [showVarIndex i]
-showExpr (Lit l) = [showLit l]
-showExpr (Comb _ qn exprs) =
+showExpr :: Options -> Expr -> Doc
+showExpr _ (Var i) = showVarIndex i
+showExpr _ (Lit l) = showLit l
+showExpr o (Comb _ qn exprs) =
   case qn of
-    ("Prelude", "apply") -> ["(" ++ unwords (map showExprL exprs) ++ ")"]
+    ("Prelude", "apply") -> parens $ sep (map (showExpr o) exprs)
     _ -> case null exprs of
-           True  -> [showQName qn]
+           True  -> showQName qn
            False -> if isInfixOp qn
-                    then ["(" ++ showExprL (exprs !! 0) +-+ showQName qn
-                              +-+ showExprL (exprs !! 1) ++ ")"]
-                    else ["(" ++ showQName qn
-                         +-+ unwords (map showExprL exprs) +-+ ")"]
-showExpr (Case _ cexpr branches) =
-  ["match" +-+ (showExprL cexpr) +-+ "with"] ++ map showBranch branches ++ ["end"]
-showExpr (Let bs e) = [(unlines $ map showBind bs) ++ showExprL e
-                      ++ replicate (length bs) ')']
-showExpr (Free _ _) = error "Free not supported yet"
-showExpr (Or _ _) = error "Or not supported yet"
-showExpr (Typed e ty) = ["(" ++ showExprL e +-+ ":" +-+ showTypeExpr ty ++ ")"]
+                    then parens $ showExpr o (exprs !! 0) <+> showQName qn
+                              <+> showExpr o (exprs !! 1)
+                    else parens $ showQName qn
+                         <+> sep (map (showExpr o) exprs)
+showExpr o (Case _ cexpr branches) =
+  sep [text "match", showExpr o cexpr, text "with"]
+  $~$ vsep (map (showBranch o) branches)
+  $~$ text "end"
+showExpr o (Let bs e) = vsep (map (showBind o) bs) <+> showExpr o e
+showExpr _ (Free _ _) = error "Free not supported yet"
+showExpr _ (Or _ _) = error "Or not supported yet"
+showExpr o (Typed e ty) = parens $ sep [showExpr o e, text ":", showTypeExpr o ty]
 
-showBind :: (VarIndex, Expr) -> String
-showBind (i, e) = "(let" +-+ showVarIndex i +-+ ":=" +-+ showExprL e +-+ "in"
+showBind :: Options -> (VarIndex, Expr) -> Doc
+showBind o (i, e) =
+  hsep [text "let", showVarIndex i, text ":=", showExpr o e]
+  $~$ text " in"
 
-showBranch :: BranchExpr -> String
-showBranch (Branch pat expr)="|" +-+ showPat pat +-+ "=>" +-+ showExprL expr
+showBranch :: Options -> BranchExpr -> Doc
+showBranch o (Branch pat expr)= text "|" <+> showPat pat <+> text "=>"
+                              <+> showExpr o expr
 
-showPat :: Pattern -> String
-showPat (Pattern name vars) = showQName name +-+ unwords (map showVarIndex vars)
+showPat :: Pattern -> Doc
+showPat (Pattern name vars) = showQName name <+> sep (map showVarIndex vars)
 showPat (LPattern l)        = showLit l
 
-showLit :: Literal -> String
-showLit (Intc n) | n >= 0    = show n
-                 | otherwise = "Negative integer literals not supported yet"
-showLit (Floatc _) = "Float literals not supported yet"
-showLit (Charc _)  = "Char literals not supported yet"
+showLit :: Literal -> Doc
+showLit (Intc n) | n >= 0    = text $ show n
+                 | otherwise = error "Negative integer literals not supported yet"
+showLit (Floatc _) = error "Float literals not supported yet"
+showLit (Charc _)  = error "Char literals not supported yet"
    
 tyVarsOfTyExpr :: TypeExpr -> [TVarIndex]
 tyVarsOfTyExpr (TVar i) = [i]
@@ -230,14 +239,14 @@ showQuantifier Forall = "forall"
 
 isProp :: FuncDecl -> Bool
 isProp (Func _ _ _ tyexpr _) = (snd $ funcTyList tyexpr) == propType
-
+{-
 splitProp :: Rule -> (Quantifier, Expr)
 splitProp (External _)  = error "External function in prop found"
 splitProp (Rule _ expr) =
   case expr of
     (Comb _ ("Prelude","apply") ((Comb FuncCall ("Test.Prop","always") []) : e))
       -> (Forall, head e)
-    _ -> error $ "Not supported: " ++ showExprL expr
+    _ -> error $ "Not supported: " ++ showExpr expr
 
 showProp :: FuncDecl -> String
 showProp (Func qn _ _ tyexpr rule) =
@@ -253,7 +262,7 @@ showProp (Func qn _ _ tyexpr rule) =
       (quant, expr) = splitProp rule
       funhead = "Theorem" +-+ showQName qn +-+ ":"
                  +-+ showQuantifier quant +-+ tvarStr' +-+ argStr ++ ","
-      funbody = indent 2 $ showExprL expr ++ terminator
+      funbody = indent 2 $ showExpr expr ++ terminator
    in funhead +|+ funbody
 -}
 --------------------------------------------------------------------------------
@@ -267,7 +276,7 @@ showTypeDecl o (Type qn _ tvars cdecls) =
                     else parens $ (tvarStr <+> text ": Type")
       lhs       = text "Inductive" <+> showQName qn <+> tvarStr' <+> text ":="
       tvarexprs = map TVar tvars
-      rhs       = indent' o $ vsep $ map (showConsDecl o (TCons qn tvarexprs)) cdecls
+      rhs       = indent' o $ vsepMap (showConsDecl o (TCons qn tvarexprs)) cdecls
       iArgDecls = vsep $ mapMaybe (implArgStr tvars) cdecls
    in pPrint $ (lhs $$ (rhs <> terminator)) <$+$> iArgDecls
 showTypeDecl _ (TypeSyn _ _ _ _) =
@@ -311,7 +320,7 @@ showTypeExpr o (FuncType dom ran) =
   showTypeExpr o dom <+> text "->" <+> showTypeExpr o ran
 showTypeExpr o (TCons qn tyexprs) = showQName qn <+> tyvarstr
   where tyvarstr = if null tyexprs then text ""
-                   else sep $ map (showTypeExpr o) tyexprs
+                   else sepMap (showTypeExpr o) tyexprs
 
 showTVarIndex :: TVarIndex -> Doc
 showTVarIndex i = text [chr (i + 65)]
