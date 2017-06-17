@@ -27,8 +27,8 @@ defaultOptions = Options {indentWidth = 2}
 indent' :: Options -> Doc -> Doc
 indent' opts = indent (indentWidth opts)
 
-sepMap :: (a -> Doc) -> [a] -> Doc
-sepMap f = sep . map f
+hsepMap :: (a -> Doc) -> [a] -> Doc
+hsepMap f = hsep . map f
 
 vsepMap :: (a -> Doc) -> [a] -> Doc
 vsepMap f = vsep . map f
@@ -126,13 +126,13 @@ showFun o f@(Func qn _ _ tyexpr rule) =
       tyvars  = nub $ tyVarsOfTyExpr tyexpr
       vars    = varsOfRule rule
       args    = zip vars dtys
-      argStr  = sepMap (showFunArg o) args
-      tvarStr  = sepMap showTVarIndex tyvars
+      argStr  = hsepMap (showFunArg o) args
+      tvarStr  = hsepMap showTVarIndex tyvars
       tvarStr' = if null tyvars
                     then text ""
                     else braces $ tvarStr <+> text ": Type"
       funkind = text $ if isRecFun f then "Fixpoint" else "Definition"
-      funhead = sep [funkind, showQName qn, tvarStr', argStr, text ":",
+      funhead = hsep [funkind, showQName qn, tvarStr', argStr, text ":",
                      showTypeExpr o rty, text ":="]
       funbody = indent' o $ showRule o rule
    in pretty 80 $ funhead $$ funbody
@@ -155,7 +155,7 @@ isRecFun (Func fqn _ _ _ rule)  = isRecRule rule
 
 showFunArg :: Options -> (VarIndex, TypeExpr) -> Doc
 showFunArg o (i, tyexpr) = parens $
-  sep [showVarIndex i, text ":", showTypeExpr o tyexpr]
+  hsep [showVarIndex i, text ":", showTypeExpr o tyexpr]
 
 showRule :: Options -> Rule -> Doc
 showRule o (Rule _ expr) = showExpr o expr <> terminator
@@ -166,22 +166,22 @@ showExpr _ (Var i) = showVarIndex i
 showExpr _ (Lit l) = showLit l
 showExpr o (Comb _ qn exprs) =
   case qn of
-    ("Prelude", "apply") -> parens $ sep (map (showExpr o) exprs)
+    ("Prelude", "apply") -> parens $ hsep (map (showExpr o) exprs)
     _ -> case null exprs of
            True  -> showQName qn
            False -> if isInfixOp qn
                     then parens $ showExpr o (exprs !! 0) <+> showQName qn
                               <+> showExpr o (exprs !! 1)
                     else parens $ showQName qn
-                         <+> sep (map (showExpr o) exprs)
+                         <+> hsep (map (showExpr o) exprs)
 showExpr o (Case _ cexpr branches) =
-  sep [text "match", showExpr o cexpr, text "with"]
+  hsep [text "match", showExpr o cexpr, text "with"]
   $~$ vsep (map (showBranch o) branches)
   $~$ text "end"
 showExpr o (Let bs e) = vsep (map (showBind o) bs) <+> showExpr o e
 showExpr _ (Free _ _) = error "Free not supported yet"
 showExpr _ (Or _ _) = error "Or not supported yet"
-showExpr o (Typed e ty) = parens $ sep [showExpr o e, text ":", showTypeExpr o ty]
+showExpr o (Typed e ty) = parens $ hsep [showExpr o e, text ":", showTypeExpr o ty]
 
 showBind :: Options -> (VarIndex, Expr) -> Doc
 showBind o (i, e) =
@@ -193,7 +193,7 @@ showBranch o (Branch pat expr)= text "|" <+> showPat pat <+> text "=>"
                               <+> showExpr o expr
 
 showPat :: Pattern -> Doc
-showPat (Pattern name vars) = showQName name <+> sep (map showVarIndex vars)
+showPat (Pattern name vars) = showQName name <+> hsep (map showVarIndex vars)
 showPat (LPattern l)        = showLit l
 
 showLit :: Literal -> Doc
@@ -270,7 +270,7 @@ showProp (Func qn _ _ tyexpr rule) =
 
 showTypeDecl :: Options -> TypeDecl -> String
 showTypeDecl o (Type qn _ tvars cdecls) =
-  let tvarStr  = sep (map showTVarIndex tvars)
+  let tvarStr  = hsep (map showTVarIndex tvars)
       tvarStr' = if null tvars
                     then text ""
                     else parens $ (tvarStr <+> text ": Type")
@@ -292,7 +292,7 @@ implArgStr tis cdecl@(Cons qn _ _ _) = if null missing then Nothing
                                                        else Just argStr
   where missing = missingTVars tis cdecl
         argStr  = text "Arguments" <+> showQName qn
-                  <+> sep (map (\_ -> text "{_}") tis) <> terminator
+                  <+> hsep (map (\_ -> text "{_}") tis) <> terminator
 
 showConsArg :: TypeExpr -> Doc
 showConsArg tyexpr = case tyexpr of
@@ -320,7 +320,7 @@ showTypeExpr o (FuncType dom ran) =
   showTypeExpr o dom <+> text "->" <+> showTypeExpr o ran
 showTypeExpr o (TCons qn tyexprs) = showQName qn <+> tyvarstr
   where tyvarstr = if null tyexprs then text ""
-                   else sepMap (showTypeExpr o) tyexprs
+                   else hsepMap (showTypeExpr o) tyexprs
 
 showTVarIndex :: TVarIndex -> Doc
 showTVarIndex i = text [chr (i + 65)]
