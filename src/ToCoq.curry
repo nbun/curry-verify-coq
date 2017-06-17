@@ -4,18 +4,34 @@
 --- @author Michael Hanus
 --- @version August 2016
 -------------------------------------------------------------------------
-module ToCoq (theoremToCoq) where
+module ToCoq where
 
 import FlatCurry.Types
 import FlatCurry.Show
+import Pretty
 
 import List
 import Maybe
 import Debug
 
-import VerifyOptions
-import VerifyPackageConfig ( packagePath )
+-- import VerifyOptions
+-- import VerifyPackageConfig ( packagePath )
 
+--------------------------------------------------------------------------------
+data Options = Options {indentWidth :: Int}
+
+defaultOptions :: Options
+defaultOptions = Options {indentWidth = 2}
+
+
+indent' :: Options -> Doc -> Doc
+indent' opts = indent (indentWidth opts)
+
+vvsep :: [Doc] -> Doc
+vvsep = compose (<$!$>)
+
+vvsepMap :: (a -> Doc) -> [a] -> Doc
+vvsepMap f = vvsep . map f
 --------------------------------------------------------------------------------
 -- TODO:
 -- * Fix indentation
@@ -38,9 +54,9 @@ theoremToCoq _ (_,theoname) allfuncs alltypes = do
 showProg :: Prog -> String
 showProg (Prog _ _ typedecls functions _) =
   let header = unlines $ ["Set Implicit Arguments."]
-      typedeclStr = unlines $ map (showTypeDecl False) typedecls
-      functionStr = unlines $ map (showFuncDecl) (filter requiredFun functions)
-   in header +||+ typedeclStr +|+ functionStr
+      typedeclStr = unlines $ map (showTypeDecl defaultOptions) typedecls
+      functionStr = ""--unlines $ map (showFuncDecl) (filter requiredFun functions)
+   in typedeclStr --header +||+ typedeclStr +|+ functionStr
 
 combineWith :: Bool -> Char -> String -> String -> String
 combineWith check c s t = case (s,t, check) of
@@ -50,33 +66,20 @@ combineWith check c s t = case (s,t, check) of
                                                            else s ++ [c] ++ t
                             _            -> s ++ [c] ++ t
 
-(+-+) :: String -> String -> String
-s +-+ t = combineWith True ' ' s t
-
-(+|+) :: String -> String -> String
-s +|+ t = combineWith True '\n' s t
-
-(+||+) :: String -> String -> String
-s +||+ t = combineWith False '\n' s t
-
-terminator :: String
-terminator = ".\n"
+terminator :: Doc
+terminator = text "."
 
 requiredFun :: FuncDecl -> Bool
 requiredFun (Func qn _ _ _ _) = qn `notElem`
   [("Prelude", "apply"), ("Prelude", "failed")] 
                                   
-
-indent :: Int -> String -> String
-indent n str = replicate n ' ' ++ str
-
 propType :: TypeExpr
 propType = TCons ("Test.Prop","Prop") []
 
-showQName :: QName -> String
-showQName qn     = case fst qn of
-                     "Prelude" -> coqEquiv
-                     _ -> snd qn
+showQName :: QName -> Doc
+showQName qn     = text $ case fst qn of
+                            "Prelude" -> coqEquiv
+                            _ -> snd qn
   where coqEquiv = case snd qn of
                      "Bool"  -> "bool"
                      "Int"   -> "nat"
@@ -99,6 +102,7 @@ isInfixOp qn = case qn of
 
 --------------------------------------------------------------------------------
 -- FuncDecl
+{-
 
 showFuncDecl :: FuncDecl -> String
 showFuncDecl fdecl = case isProp fdecl of
@@ -251,38 +255,40 @@ showProp (Func qn _ _ tyexpr rule) =
                  +-+ showQuantifier quant +-+ tvarStr' +-+ argStr ++ ","
       funbody = indent 2 $ showExprL expr ++ terminator
    in funhead +|+ funbody
+-}
 --------------------------------------------------------------------------------
 -- TypeDecl
 
-showTypeDecl :: Bool -> TypeDecl -> String
-showTypeDecl imp (Type qn _ tvars cdecls) =
-  let tvarStr  = intersperse ' ' (concatMap showTVarIndex tvars)
+showTypeDecl :: Options -> TypeDecl -> String
+showTypeDecl o (Type qn _ tvars cdecls) =
+  let tvarStr  = sep (map showTVarIndex tvars)
       tvarStr' = if null tvars
-                    then ""
-                    else " " ++ implicit imp (tvarStr +-+ ": Type")
-      lhs       = "Inductive" +-+ showQName qn ++ tvarStr' +-+ ":="
+                    then text ""
+                    else parens $ (tvarStr <+> text ": Type")
+      lhs       = text "Inductive" <+> showQName qn <+> tvarStr' <+> text ":="
       tvarexprs = map TVar tvars
-      rhs       = unlines $ map (showConsDecl (TCons qn tvarexprs)) cdecls
-      iArgDecls = concat $ mapMaybe (implArgStr tvars) cdecls
-   in lhs +|+ init rhs ++ terminator +||+ iArgDecls
+      rhs       = indent' o $ vsep $ map (showConsDecl o (TCons qn tvarexprs)) cdecls
+      iArgDecls = vsep $ mapMaybe (implArgStr tvars) cdecls
+   in pPrint $ (lhs $$ (rhs <> terminator)) <$+$> iArgDecls
 showTypeDecl _ (TypeSyn _ _ _ _) =
   error "TypeSyn not yet supported"
 
-showConsDecl :: TypeExpr -> ConsDecl -> String
-showConsDecl datatype (Cons qn _ _ typeexprs) =
-  "|" +-+ showQName qn +-+ ":" +-+ typeListFunType (typeexprs ++ [datatype])
+showConsDecl :: Options -> TypeExpr -> ConsDecl -> Doc
+showConsDecl o datatype (Cons qn _ _ typeexprs) = 
+  text "|" <+> showQName qn <+> text ":"
+  <+> typeListFunType o (typeexprs ++ [datatype])
 
-implArgStr :: [TVarIndex] -> ConsDecl -> Maybe String
+implArgStr :: [TVarIndex] -> ConsDecl -> Maybe Doc
 implArgStr tis cdecl@(Cons qn _ _ _) = if null missing then Nothing
                                                        else Just argStr
   where missing = missingTVars tis cdecl
-        argStr  = "Arguments" +-+ showQName qn
-                  +-+ unwords (map (\_ -> "{_}") tis) ++ terminator
+        argStr  = text "Arguments" <+> showQName qn
+                  <+> sep (map (\_ -> text "{_}") tis) <> terminator
 
-showConsArg :: TypeExpr -> String
+showConsArg :: TypeExpr -> Doc
 showConsArg tyexpr = case tyexpr of
-                       TVar _ -> "{_}"
-                       _      -> "_"
+                       TVar _ -> text "{_}"
+                       _      -> text "_"
 
 tyVarId :: TypeExpr -> Maybe TVarIndex
 tyVarId tyexpr = case tyexpr of
@@ -292,26 +298,23 @@ tyVarId tyexpr = case tyexpr of
 missingTVars :: [TVarIndex] -> ConsDecl -> [TVarIndex]
 missingTVars tis (Cons _ _ _ tyexprs) = tis \\ mapMaybe tyVarId tyexprs
 
-typeListFunType :: [TypeExpr] -> String
-typeListFunType tys = case tys of
-                        []     -> ""
-                        [t]    -> showTypeExpr t
-                        (t:ts) -> showTypeExpr t
-                                    ++ " -> " ++ typeListFunType ts
+typeListFunType :: Options -> [TypeExpr] -> Doc
+typeListFunType o tys = case tys of
+                          []     -> text ""
+                          [t]    -> showTypeExpr o t
+                          (t:ts) -> showTypeExpr o t
+                                    <+> text "->" <+> typeListFunType o ts
 
-showTypeExpr :: TypeExpr -> String
-showTypeExpr (TVar i)           = showTVarIndex i
-showTypeExpr (FuncType dom ran) = showTypeExpr dom +-+ "->" +-+ showTypeExpr ran
-showTypeExpr (TCons qn tyexprs) = showQName qn ++ tyvarstr
-  where tyvarstr = if null tyexprs then ""
-                   else " " ++ concat (intersperse " " (map showTypeExpr tyexprs))
+showTypeExpr :: Options -> TypeExpr -> Doc
+showTypeExpr _ (TVar i)           = showTVarIndex i
+showTypeExpr o (FuncType dom ran) =
+  showTypeExpr o dom <+> text "->" <+> showTypeExpr o ran
+showTypeExpr o (TCons qn tyexprs) = showQName qn <+> tyvarstr
+  where tyvarstr = if null tyexprs then text ""
+                   else sep $ map (showTypeExpr o) tyexprs
 
-showTVarIndex :: TVarIndex -> String
-showTVarIndex i = [chr (i + 65)]
+showTVarIndex :: TVarIndex -> Doc
+showTVarIndex i = text [chr (i + 65)]
 
-showVarIndex :: VarIndex -> String
-showVarIndex i = [chr (i + 97)] 
-
-implicit :: Bool -> String -> String
-implicit True s  = '{' : s ++ "}"
-implicit False s = '(' : s ++ ")"
+showVarIndex :: VarIndex -> Doc
+showVarIndex i = text [chr (i + 97)]
