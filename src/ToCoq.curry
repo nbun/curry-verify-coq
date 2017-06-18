@@ -4,7 +4,7 @@
 --- @author Michael Hanus
 --- @version August 2016
 -------------------------------------------------------------------------
-module ToCoq where
+module ToCoq (theoremToCoq) where
 
 import FlatCurry.Types
 import FlatCurry.Show
@@ -14,7 +14,7 @@ import List
 import Maybe
 import Debug
 
--- import VerifyOptions
+import qualified VerifyOptions
 -- import VerifyPackageConfig ( packagePath )
 
 --------------------------------------------------------------------------------
@@ -33,6 +33,9 @@ hsepMap f = hsep . map f
 vsepMap :: (a -> Doc) -> [a] -> Doc
 vsepMap f = vsep . map f
 
+vsepbMap :: (a -> Doc) -> [a] -> Doc
+vsepbMap f = vsepBlank . map f 
+
 ($~$) :: Doc -> Doc -> Doc
 d1 $~$ d2 = align $ d1 $$ d2
 
@@ -41,6 +44,7 @@ infixl 5 $~$
 --------------------------------------------------------------------------------
 -- TODO:
 -- * Fix indentation a little more
+-- * Renaming of functions names that contain symbols
 -- * let flattening
 -- * Handling of $
 -- * Nondeterminism
@@ -54,28 +58,18 @@ t1 = do
   putStrLn p
 -------------------------------------------------------------------------
 
-theoremToCoq :: Options -> QName -> [FuncDecl] -> [TypeDecl] -> IO ()
+theoremToCoq :: VerifyOptions.Options -> QName -> [FuncDecl] -> [TypeDecl] -> IO ()
 theoremToCoq _ (_,theoname) allfuncs alltypes = do
-  writeFile "alltypes" $ show alltypes
-  writeFile "allfuncs" $ show allfuncs
   writeFile "prog" $ show (Prog "" [] alltypes allfuncs [])
   writeFile (theoname ++ ".v") (showProg (Prog "" [] alltypes allfuncs []))
 
 showProg :: Prog -> String
 showProg (Prog _ _ typedecls functions _) =
-  let header = unlines $ ["Set Implicit Arguments."]
-      typedeclStr = unlines $ map (showTypeDecl defaultOptions) typedecls
-      functionStr = unlines $ map (showFuncDecl defaultOptions)
-                                  (filter requiredFun functions)
-   in header ++ typedeclStr ++ functionStr
-
-combineWith :: Bool -> Char -> String -> String -> String
-combineWith check c s t = case (s,t, check) of
-                            ("", _, _)   -> t
-                            (_, "", _)   -> s
-                            (_, _, True) -> if last s == c then (s ++ t)
-                                                           else s ++ [c] ++ t
-                            _            -> s ++ [c] ++ t
+  let header = vsep [text "Set Implicit Arguments."]
+      typedeclStr = vsepbMap (showTypeDecl defaultOptions) typedecls
+      functionStr = vsepbMap (showFuncDecl defaultOptions)
+                             (filter requiredFun functions)
+   in pPrint $ header $$ typedeclStr $$ functionStr
 
 terminator :: Doc
 terminator = text "."
@@ -115,12 +109,12 @@ isInfixOp qn = case qn of
 -- FuncDecl
 
 
-showFuncDecl :: Options -> FuncDecl -> String
+showFuncDecl :: Options -> FuncDecl -> Doc
 showFuncDecl o fdecl = case isProp fdecl of
-                       True  -> "no"--showProp fdecl
-                       False -> showFun o fdecl
+                       True  -> showProp o fdecl
+                       False -> showFun  o fdecl
 
-showFun :: Options -> FuncDecl -> String
+showFun :: Options -> FuncDecl -> Doc
 showFun o f@(Func qn _ _ tyexpr rule) =
   let (dtys, rty) = funcTyList tyexpr
       tyvars  = nub $ tyVarsOfTyExpr tyexpr
@@ -135,7 +129,7 @@ showFun o f@(Func qn _ _ tyexpr rule) =
       funhead = hsep [funkind, showQName qn, tvarStr', argStr, text ":",
                      showTypeExpr o rty, text ":="]
       funbody = indent' o $ showRule o rule
-   in pretty 80 $ funhead $$ funbody
+   in funhead $$ funbody
 
 isRecFun :: FuncDecl -> Bool
 isRecFun (Func fqn _ _ _ rule)  = isRecRule rule
@@ -234,41 +228,41 @@ varsOfRule (External _)  = []
 
 data Quantifier = Forall
 
-showQuantifier :: Quantifier -> String
-showQuantifier Forall = "forall"
+showQuantifier :: Quantifier -> Doc
+showQuantifier Forall = text "forall"
 
 isProp :: FuncDecl -> Bool
 isProp (Func _ _ _ tyexpr _) = (snd $ funcTyList tyexpr) == propType
-{-
+
 splitProp :: Rule -> (Quantifier, Expr)
 splitProp (External _)  = error "External function in prop found"
 splitProp (Rule _ expr) =
   case expr of
     (Comb _ ("Prelude","apply") ((Comb FuncCall ("Test.Prop","always") []) : e))
       -> (Forall, head e)
-    _ -> error $ "Not supported: " ++ showExpr expr
+    _ -> error $ "Not supported: " ++ show expr
 
-showProp :: FuncDecl -> String
-showProp (Func qn _ _ tyexpr rule) =
+showProp :: Options -> FuncDecl -> Doc
+showProp o (Func qn _ _ tyexpr rule) =
   let (dtys, _) = funcTyList tyexpr
       tyvars    = nub $ tyVarsOfTyExpr tyexpr
       vars      = varsOfRule rule
       args      = zip vars dtys
-      argStr    = unwords $ map showFunArg args
-      tvarStr   = intersperse ' ' (concatMap showTVarIndex tyvars)
+      argStr    = hsepMap (showFunArg o) args
+      tvarStr   = hsepMap showTVarIndex tyvars
       tvarStr'  = if null tyvars
-                    then ""
-                    else " " ++ implicit False (tvarStr +-+ ": Type")
+                    then text ""
+                    else text " " <> parens (tvarStr <+> text ": Type")
       (quant, expr) = splitProp rule
-      funhead = "Theorem" +-+ showQName qn +-+ ":"
-                 +-+ showQuantifier quant +-+ tvarStr' +-+ argStr ++ ","
-      funbody = indent 2 $ showExpr expr ++ terminator
-   in funhead +|+ funbody
--}
+      funhead = hsep [text "Theorem", showQName qn, text ":", showQuantifier quant,
+                      tvarStr'] <+> argStr <> text ","
+      funbody = indent 2 $ showExpr o expr <> terminator
+   in funhead $$ funbody
+
 --------------------------------------------------------------------------------
 -- TypeDecl
 
-showTypeDecl :: Options -> TypeDecl -> String
+showTypeDecl :: Options -> TypeDecl -> Doc
 showTypeDecl o (Type qn _ tvars cdecls) =
   let tvarStr  = hsep (map showTVarIndex tvars)
       tvarStr' = if null tvars
@@ -278,7 +272,7 @@ showTypeDecl o (Type qn _ tvars cdecls) =
       tvarexprs = map TVar tvars
       rhs       = indent' o $ vsepMap (showConsDecl o (TCons qn tvarexprs)) cdecls
       iArgDecls = vsep $ mapMaybe (implArgStr tvars) cdecls
-   in pPrint $ (lhs $$ (rhs <> terminator)) <$+$> iArgDecls
+   in lhs $$ rhs <> terminator <$+$> iArgDecls <> linebreak
 showTypeDecl _ (TypeSyn _ _ _ _) =
   error "TypeSyn not yet supported"
 
