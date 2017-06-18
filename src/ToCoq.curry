@@ -311,10 +311,18 @@ typeListFunType o tys = case tys of
 showTypeExpr :: Options -> TypeExpr -> Doc
 showTypeExpr _ (TVar i)           = showTVarIndex i
 showTypeExpr o (FuncType dom ran) =
-  showTypeExpr o dom <+> text "->" <+> showTypeExpr o ran
+  parensIf (complexType dom) (showTypeExpr o dom)
+  <+> text "->"
+  <+> parensIf (complexType ran) (showTypeExpr o ran)
 showTypeExpr o (TCons qn tyexprs) = showQName qn <+> tyvarstr
   where tyvarstr = if null tyexprs then text ""
-                   else hsepMap (showTypeExpr o) tyexprs
+                   else hsepMap showT tyexprs
+        showT ty = parensIf (complexType ty) (showTypeExpr o ty)
+
+complexType :: TypeExpr -> Bool
+complexType ty = case ty of
+                   TVar _ -> False
+                   _      -> True
 
 showTVarIndex :: TVarIndex -> Doc
 showTVarIndex i = text [chr (i + 65)]
