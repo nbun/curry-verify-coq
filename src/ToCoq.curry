@@ -172,15 +172,18 @@ showExpr o (Case _ cexpr branches) =
   hsep [text "match", showExpr o cexpr, text "with"]
   $~$ vsep (map (showBranch o) branches)
   $~$ text "end"
-showExpr o (Let bs e) = vsep (map (showBind o) bs) <+> showExpr o e
+showExpr o l@(Let _ _) = vsep (map (showBind o e) bs)
+  where (Let bs e) = flattenLet l
 showExpr _ (Free _ _) = error "Free not supported yet"
-showExpr _ (Or _ _) = error "Or not supported yet"
+showExpr _ (Or _ _)   = error "Or not supported yet"
 showExpr o (Typed e ty) = parens $ hsep [showExpr o e, text ":", showTypeExpr o ty]
 
-showBind :: Options -> (VarIndex, Expr) -> Doc
-showBind o (i, e) =
-  hsep [text "let", showVarIndex i, text ":=", showExpr o e]
-  $~$ text " in"
+showBind :: Options -> Expr -> (VarIndex, Expr) -> Doc
+showBind o expr (v, e) = inPosition $
+  hsep [text "let", showVarIndex v, text ":=", showExpr o e]
+  where inPosition doc = case expr of
+                           Let _ _ -> doc <+> text "in" $~$ showExpr o expr
+                           _       -> doc $~$ text " in" <+> showExpr o expr
 
 showBranch :: Options -> BranchExpr -> Doc
 showBranch o (Branch pat expr)= text "|" <+> showPat pat <+> text "=>"
@@ -329,3 +332,28 @@ showTVarIndex i = text [chr (i + 65)]
 
 showVarIndex :: VarIndex -> Doc
 showVarIndex i = text [chr (i + 97)]
+
+--------------------------------------------------------------------------------
+-- FlatCurry program transformations
+
+flattenLet :: Expr -> Expr
+flattenLet = flattenNestedLet . flattenMultiLet
+
+flattenNestedLet :: Expr -> Expr
+flattenNestedLet e =
+  case e of
+    Let [(v,e')] expr ->
+      case e' of
+        Let [b] expr' -> Let [b] (Let [(v, flattenNestedLet expr')]
+                                      (flattenNestedLet expr))
+        _             -> e
+    _  -> e -- TODO add mapping over exprs
+
+flattenMultiLet :: Expr -> Expr
+flattenMultiLet expr =
+  case expr of
+    Let bs e -> case bs of
+                  []      -> Let [] e
+                  [b]     -> Let [b] e
+                  (b:bs') -> Let [b] (flattenMultiLet $ Let bs' e)
+    _ -> expr -- TODO add mapping over exprs
