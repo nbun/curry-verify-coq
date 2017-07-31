@@ -7,14 +7,14 @@
 
 module ProofCurry.Types where
 
-data CoqProg = CoqProg String [String] [PDecl]
+data CoqProg a = CoqProg String [String] [PDecl a]
 
-data PDecl = PTypeDecl PTypeDecl
-           | PFuncDecl PFuncDecl
-           | PNotation PNotation
-           | POption POption
+data PDecl a = PTypeDecl PTypeDecl
+             | PFuncDecl (PFuncDecl a)
+             | PNotation (PNotation a)
+             | POption POption
 
-data PNotation = PNota String PExpr (Maybe String)
+data PNotation a = PNota String (PExpr a) (Maybe String)
 
 type POption = String
 
@@ -39,25 +39,25 @@ type PArity = Int
 
 data PFuncType = Definition | Fixpoint
                
-data PFuncDecl
-    = PFunc QName PArity PFuncType [(PVarIndex, PTypeExpr)] PTypeExpr PExpr
+data PFuncDecl a
+    = PFunc QName PArity PFuncType [(PVarIndex, a)] PTypeExpr (PExpr a)
 
 data PCombType
     = PFuncCall | PConsCall | PFuncPartCall PArity | PConsPartCall PArity
 
-data PExpr
-    = PVar PVarIndex
-    | PLit PLiteral
-    | PComb PCombType QName [PExpr]
-    | PLet PVarIndex PExpr PExpr
-    | PMatch PExpr [PBranchExpr]
-    | PTyped PExpr PTypeExpr
+data PExpr a
+    = PVar   a PVarIndex
+    | PLit   a PLiteral
+    | PComb  a PCombType (QName, a) [PExpr a]
+    | PLet   a (PVarIndex, a) (PExpr a) (PExpr a)
+    | PMatch a (PExpr a) [PBranchExpr a]
+    | PTyped a (PExpr a) PTypeExpr
 
-data PBranchExpr = PBranch PPattern PExpr
+data PBranchExpr a = PBranch (PPattern a) (PExpr a)
 
-data PPattern
-    = PPattern QName [PVarIndex]
-    | PLPattern PLiteral
+data PPattern a
+    = PPattern  a (QName, a) [(PVarIndex, a)]
+    | PLPattern a PLiteral
 
 data PLiteral
     = PIntc    Int
