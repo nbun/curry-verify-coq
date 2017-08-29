@@ -38,7 +38,7 @@ showProg :: Prog -> String
 showProg (Prog _ _ typedecls functions _) =
   let header = vsep [text "Set Implicit Arguments."]
       typedeclStr = vsepbMap (tTypeDecl defaultOptions) typedecls
-      functionStr = vsepbMap (showFuncDecl defaultOptions)
+      functionStr = vsepbMap (tFuncDecl defaultOptions)
                              (filter requiredFun functions)
    in pPrint $ header $$ typedeclStr $$ functionStr
 
@@ -75,59 +75,45 @@ isInfixOp qn = case qn of
                  ("Prelude", "==") -> True
                  _                 -> False
 
-
+-}
 --------------------------------------------------------------------------------
 -- FuncDecl
 
 
-showFuncDecl :: Options -> FuncDecl -> Doc
-showFuncDecl o fdecl = case isProp fdecl of
-                       True  -> showProp o fdecl
-                       False -> showFun  o fdecl
+-- tFuncDecl :: AFuncDecl TypeExpr -> PFuncDecl PTypeExpr
+-- tFuncDecl o fdecl = case isProp fdecl of
+--                        True  -> showProp o fdecl
+--                        False -> tFun  o fdecl
 
-showFun :: Options -> FuncDecl -> Doc
-showFun o f@(Func qn _ _ tyexpr rule) =
-  let (dtys, rty) = funcTyList tyexpr
-      tyvars  = nub $ tyVarsOfTyExpr tyexpr
-      vars    = varsOfRule rule
-      args    = zip vars dtys
-      argStr  = hsepMap (showFunArg o) args
-      tvarStr  = hsepMap showTVarIndex tyvars
-      tvarStr' = if null tyvars
-                    then text ""
-                    else braces $ tvarStr <+> text ": Type"
-      funkind = text $ if isRecFun f then "Fixpoint" else "Definition"
-      funhead = hsep [funkind, showQName qn, tvarStr', argStr, text ":",
-                     tTypeExpr o rty, text ":="]
-      funbody = indent' o $ showRule o rule
-   in funhead $$ funbody
+tFun :: AFuncDecl a -> PFuncDecl a
+tFun f@(AFunc qn ar _ tyexpr rule) =
+  PFunc qn ar functype args (tTypeExpr tyexpr) (tRule rule)
+    where
+      (tys, _) = funcTyList tyexpr
+      vars     = varsOfRule rule
+      args     = zip vars (map tTypeExpr tys)
+      functype = if isRecFun f then Fixpoint else Definition
+        
+isRecFun :: AFuncDecl a -> Bool
+isRecFun (AFunc fqn _ _ _ rule)  = isRecRule rule
+  where isRecRule (ARule _ _ expr) = isRecExpr expr
+        isRecRule (AExternal _ _)  = False
 
-isRecFun :: FuncDecl -> Bool
-isRecFun (Func fqn _ _ _ rule)  = isRecRule rule
-  where isRecRule (Rule _ expr) = isRecExpr expr
-        isRecRule (External _)  = False
+        isRecExpr (AVar _ _)        = False
+        isRecExpr (ALit _ _)        = False
+        isRecExpr (AComb _ _ (qn, _) es) = fqn == qn || or (map isRecExpr es)
+        isRecExpr (ALet _ binds e)  = isRecExpr e
+                                      || or (map (isRecExpr . snd) binds)
+        isRecExpr (AFree _ _ e)     = isRecExpr e
+        isRecExpr (AOr _ e1 e2)     = isRecExpr e1 || isRecExpr e2
+        isRecExpr (ACase _ _ e brs) = isRecExpr e  || or (map isRecBranch brs)
+        isRecExpr (ATyped _ e _)    = isRecExpr e
 
-        isRecExpr (Var _)        = False
-        isRecExpr (Lit _)        = False
-        isRecExpr (Comb _ qn es) = fqn == qn    || or (map isRecExpr es)
-        isRecExpr (Let binds e)  = isRecExpr e  || or (map (isRecExpr . snd) binds)
-        isRecExpr (Free _ e)     = isRecExpr e
-        isRecExpr (Or e1 e2)     = isRecExpr e1 || isRecExpr e2
-        isRecExpr (Case _ e brs) = isRecExpr e  || or (map isRecBranch brs)
-        isRecExpr (Typed e _)    = isRecExpr e
+        isRecBranch (ABranch _ e) = isRecExpr e
 
-        isRecBranch (Branch _ e) = isRecExpr e
-
-showFunArg :: Options -> (VarIndex, TypeExpr) -> Doc
-showFunArg o (i, tyexpr) = parens $
-  hsep [showVarIndex i, text ":", tTypeExpr o tyexpr]
-
-showRule :: Options -> Rule -> Doc
-showRule o (Rule _ expr) = tExpr o expr <> terminator
-showRule _ (External s)  = error$ "External function " ++ s ++ " not supported yet"
-
--}
-
+tRule :: ARule a -> PExpr a
+tRule (ARule _ _ e) = tExpr e
+tRule (AExternal _ _) = error "external rule not supported"
 
 tExpr :: AExpr a -> PExpr a
 tExpr (AVar ty i) = PVar ty i
@@ -160,7 +146,7 @@ tLiteral (Intc n) | n >= 0    = PIntc n
 tLiteral (Floatc _) = error "Float literals not supported yet"
 tLiteral (Charc _)  = error "Char literals not supported yet"
 
-{-
+
 tyVarsOfTyExpr :: TypeExpr -> [TVarIndex]
 tyVarsOfTyExpr (TVar i) = [i]
 tyVarsOfTyExpr (FuncType dom ran) = tyVarsOfTyExpr dom ++ tyVarsOfTyExpr ran
@@ -184,10 +170,10 @@ funcTyList' fty@(FuncType dom ran) =
 funcTyList' tyv@(TVar _)    = ([tyv], tyv)
 funcTyList' tyc@(TCons _ _) = ([tyc], tyc)
 
-varsOfRule :: Rule -> [VarIndex]
-varsOfRule (Rule vars _) = vars
-varsOfRule (External _)  = []
-
+varsOfRule :: ARule a -> [VarIndex]
+varsOfRule (ARule _ vars _) = map fst vars
+varsOfRule (AExternal _ _)  = []
+{-
 --------------------------------------------------------------------------------
 -- Property
 
@@ -213,7 +199,7 @@ showProp o (Func qn _ _ tyexpr rule) =
       tyvars    = nub $ tyVarsOfTyExpr tyexpr
       vars      = varsOfRule rule
       args      = zip vars dtys
-      argStr    = hsepMap (showFunArg o) args
+      argStr    = hsepMap (tFunArg o) args
       tvarStr   = hsepMap showTVarIndex tyvars
       tvarStr'  = if null tyvars
                     then text ""

@@ -40,7 +40,7 @@ type PArity = Int
 data PFuncType = Definition | Fixpoint
                
 data PFuncDecl a
-    = PFunc QName PArity PFuncType [(PVarIndex, a)] PTypeExpr (PExpr a)
+    = PFunc QName PArity PFuncType [(PVarIndex, PTypeExpr)] PTypeExpr (PExpr a)
 
 data PCombType
     = PFuncCall | PConsCall | PFuncPartCall PArity | PConsPartCall PArity
