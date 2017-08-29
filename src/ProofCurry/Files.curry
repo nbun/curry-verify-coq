@@ -2,91 +2,46 @@ module ProofCurry.Files where
 
 import ProofCurry.Types
 import FlatCurry.Annotated.Types hiding (QName)
+import FlatCurry.Annotated.TypeInference
 import List
 import Maybe
 import Debug
 import qualified VerifyOptions
-{-
-flatCurryToProofCurry :: Prog -> CoqProg
-flatCurryToProofCurry p = CoqProg "" [] []
+
+-- flatCurryToProofCurry :: Prog -> IO (CoqProg TypeExpr)
+flatCurryToProofCurry p = do
+  res <- inferProg p
+  case res of
+    Left e  -> error e               
+    Right p -> return $ tProg p
 
 --------------------------------------------------------------------------------
-data Options = Options {indentWidth :: Int}
 
-defaultOptions :: Options
-defaultOptions = Options {indentWidth = 2}
+tProg :: AProg a -> CoqProg a
+tProg (AProg name imports typedecls functions opdecls) =
+  let ttypedecls = map tTypeDecl typedecls
+      tdefs = map tFuncDecl (filter requiredFun functions)
+   in CoqProg name [] (ttypedecls ++ tdefs)
 
 
-indent' :: Options -> Doc -> Doc
-indent' opts = indent (indentWidth opts)
-
-hsepMap :: (a -> Doc) -> [a] -> Doc
-hsepMap f = hsep . map f
-
-vsepMap :: (a -> Doc) -> [a] -> Doc
-vsepMap f = vsep . map f
-
-vsepbMap :: (a -> Doc) -> [a] -> Doc
-vsepbMap f = vsepBlank . map f 
-
-($~$) :: Doc -> Doc -> Doc
-d1 $~$ d2 = align $ d1 $$ d2
-
-infixl 5 $~$
-
-showProg :: Prog -> String
-showProg (Prog _ _ typedecls functions _) =
-  let header = vsep [text "Set Implicit Arguments."]
-      typedeclStr = vsepbMap (tTypeDecl defaultOptions) typedecls
-      functionStr = vsepbMap (tFuncDecl defaultOptions)
-                             (filter requiredFun functions)
-   in pPrint $ header $$ typedeclStr $$ functionStr
-
-terminator :: Doc
-terminator = text "."
-
-requiredFun :: FuncDecl -> Bool
-requiredFun (Func qn _ _ _ _) = qn `notElem`
+requiredFun :: AFuncDecl a -> Bool
+requiredFun (AFunc qn _ _ _ _) = qn `notElem`
   [("Prelude", "apply"), ("Prelude", "failed")] 
                                   
 propType :: TypeExpr
 propType = TCons ("Test.Prop","Prop") []
 
-showQName :: QName -> Doc
-showQName qn     = text $ case fst qn of
-                            "Prelude" -> coqEquiv
-                            _ -> snd qn
-  where coqEquiv = case snd qn of
-                     "Bool"  -> "bool"
-                     "Int"   -> "nat"
-                     "True"  -> "true"
-                     "False" -> "false"
-                     "=="    -> "="
-                     "<"     -> "<"
-                     ">"     -> ">"
-                     "otherwise" -> "true"
-                     "failed" -> "failed"
-                     "(,)"    -> "pair"
-                     "id"     -> "id"
-                     s       -> error $ show s ++ "not supported yet"
-
-isInfixOp :: QName -> Bool
-isInfixOp qn = case qn of
-                 ("Prelude", "==") -> True
-                 _                 -> False
-
--}
 --------------------------------------------------------------------------------
 -- FuncDecl
 
 
--- tFuncDecl :: AFuncDecl TypeExpr -> PFuncDecl PTypeExpr
--- tFuncDecl o fdecl = case isProp fdecl of
---                        True  -> showProp o fdecl
---                        False -> tFun  o fdecl
+tFuncDecl :: AFuncDecl a -> PDecl a
+tFuncDecl fdecl = case isProp fdecl of
+                    True  -> PProperty $ tProp fdecl
+                    False -> PFuncDecl $ tFunc fdecl
 
-tFun :: AFuncDecl a -> PFuncDecl a
-tFun f@(AFunc qn ar _ tyexpr rule) =
+tFunc :: AFuncDecl a -> PFuncDecl a
+tFunc f@(AFunc qn ar _ tyexpr rule) =
   PFunc qn ar functype args (tTypeExpr tyexpr) (tRule rule)
     where
       (tys, _) = funcTyList tyexpr
@@ -173,52 +128,47 @@ funcTyList' tyc@(TCons _ _) = ([tyc], tyc)
 varsOfRule :: ARule a -> [VarIndex]
 varsOfRule (ARule _ vars _) = map fst vars
 varsOfRule (AExternal _ _)  = []
-{-
+
 --------------------------------------------------------------------------------
 -- Property
 
-data Quantifier = Forall
 
-showQuantifier :: Quantifier -> Doc
-showQuantifier Forall = text "forall"
+isProp :: AFuncDecl a -> Bool
+isProp (AFunc _ _ _ tyexpr _) = (snd $ funcTyList tyexpr) == propType
 
-isProp :: FuncDecl -> Bool
-isProp (Func _ _ _ tyexpr _) = (snd $ funcTyList tyexpr) == propType
-
-splitProp :: Rule -> (Quantifier, Expr)
-splitProp (External _)  = error "External function in prop found"
-splitProp (Rule _ expr) =
+splitProp :: ARule a -> (Quantifier, AExpr a)
+splitProp (AExternal _ _)  = error "External function in prop found"
+splitProp (ARule _ _ expr) =
   case expr of
-    (Comb _ ("Prelude","apply") ((Comb FuncCall ("Test.Prop","always") []) : e))
-      -> (Forall, head e)
+    AComb _ _ qn es ->
+      case qn of
+        (("Prelude","apply"), _) ->
+          case es of
+            (AComb _ FuncCall qn' []) : e ->
+              case qn' of
+                (("Test.Prop", "always"), _) -> (Forall, head e)
+                _ -> error $ "Not supported: " ++ show qn
+            _ -> error $ "Not supported: " ++ show (head es)
+        _ -> error $ "Not supported: " ++ show qn 
     _ -> error $ "Not supported: " ++ show expr
 
-showProp :: Options -> FuncDecl -> Doc
-showProp o (Func qn _ _ tyexpr rule) =
+tProp :: AFuncDecl a -> PProperty a
+tProp (AFunc qn _ _ tyexpr rule) =
   let (dtys, _) = funcTyList tyexpr
-      tyvars    = nub $ tyVarsOfTyExpr tyexpr
       vars      = varsOfRule rule
-      args      = zip vars dtys
-      argStr    = hsepMap (tFunArg o) args
-      tvarStr   = hsepMap showTVarIndex tyvars
-      tvarStr'  = if null tyvars
-                    then text ""
-                    else text " " <> parens (tvarStr <+> text ": Type")
+      args      = zip vars (map tTypeExpr dtys)
       (quant, expr) = splitProp rule
-      funhead = hsep [text "Theorem", showQName qn, text ":", showQuantifier quant,
-                      tvarStr'] <+> argStr <> text ","
-      funbody = indent 2 $ tExpr o expr <> terminator
-   in funhead $$ funbody
+   in PProp qn (Just quant) args (tExpr expr)
 
 --------------------------------------------------------------------------------
 -- TypeDecl
--}
-tTypeDecl :: TypeDecl -> PTypeDecl
+
+tTypeDecl :: TypeDecl -> PDecl a
 tTypeDecl (Type qn _ tvars cdecls) =
-    PInductive qn tvars (map (tConsDecl datatype) cdecls)
+    PTypeDecl $ PInductive qn tvars (map (tConsDecl datatype) cdecls)
         where datatype = TCons qn (map TVar tvars)
 tTypeDecl (TypeSyn qn _ tvars tyExpr) =
-    PDefinition qn tvars (tTypeExpr tyExpr)
+    PTypeDecl $ PDefinition qn tvars (tTypeExpr tyExpr)
 
 tConsDecl :: TypeExpr -> ConsDecl -> PConsDecl
 tConsDecl datatype (Cons qn ar _ tyExprs) =

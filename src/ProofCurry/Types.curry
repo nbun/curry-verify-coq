@@ -9,10 +9,16 @@ module ProofCurry.Types where
 
 data CoqProg a = CoqProg String [String] [PDecl a]
 
-data PDecl a = PTypeDecl PTypeDecl
-             | PFuncDecl (PFuncDecl a)
-             | PNotation (PNotation a)
-             | POption POption
+data PDecl a = PTypeDecl  PTypeDecl
+             | PFuncDecl  (PFuncDecl a)
+             | PProperty  (PProperty a)
+             | PNotation  (PNotation a)
+             | POption    POption
+
+data PProperty a =
+    PProp QName (Maybe Quantifier) [(PVarIndex, PTypeExpr)] (PExpr a)
+
+data Quantifier = Forall
 
 data PNotation a = PNota String (PExpr a) (Maybe String)
 
