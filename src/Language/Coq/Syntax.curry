@@ -1,5 +1,3 @@
-
-
 module Language.Coq.Syntax where
 
 type Identifier = String
