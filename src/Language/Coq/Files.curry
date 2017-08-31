@@ -167,8 +167,9 @@ tTypeDecl (FCAT.Type qn _ tvars cdecls) = SentenceInductive $ Inductive [indbody
         binders  = map bind tvars
         ctors    = map (tConsDecl datatype) cdecls
         indbody  = InductiveBody (tQName qn) binders (TermSort Type) ctors
--- tTypeDecl (TypeSyn qn _ tvars tyExpr) =
-  -- PTypeDecl $ PDefinition qn tvars (tTypeExpr tyExpr)
+tTypeDecl (FCAT.TypeSyn qn _ tvars tyExpr) =
+  SentenceDefinition $ Definition (tQName qn) binders Nothing (tTypeExpr tyExpr)
+  where binders = map (BinderName . NameIdent . tTVarIndex) tvars
 
 tConsDecl :: FCAT.TypeExpr -> FCAT.ConsDecl -> InductiveCtor
 tConsDecl datatype (FCAT.Cons qn _ _ tyexprs) =
