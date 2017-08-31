@@ -107,9 +107,9 @@ data Sentence = SentenceDefinition Definition
               | SentenceCombinedScheme Identifier [Identifier]
 
 -- Sort --------------------------------------------------------
-data Sort = Prop
-          | Set
-          | Type
+data Sort = SortProp
+          | SortSet
+          | SortType
 
 -- Term --------------------------------------------------------
 data Term = TermApp Term [Term]

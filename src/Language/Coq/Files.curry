@@ -1,7 +1,7 @@
 module Language.Coq.Files where
 
 import           FlatCurry.Annotated.TypeInference
-import qualified FlatCurry.Annotated.Types         as FCAT
+import           FlatCurry.Annotated.Types
 import           Language.Coq.Syntax
 
 {-
@@ -37,9 +37,9 @@ propType = TCons ("Test.Prop","Prop") []
 --                     True  -> PProperty $ tProp fdecl
 --                     False -> PFuncDecl $ tFunction fdecl
 
-tFunction :: FCAT.AFuncDecl a -> Sentence
-tFunction f@(FCAT.AFunc qn ar _ tyexpr rule) =
-  if isRecFun f then fixdecl else defdecl 
+tFunction :: AFuncDecl a -> Sentence
+tFunction f@(AFunc qn ar _ tyexpr rule) =
+  if isRecFun f then fixdecl else defdecl
   where
     (tys, _)   = funcTyList tyexpr
     vars       = varsOfRule rule
@@ -52,26 +52,26 @@ tFunction f@(FCAT.AFunc qn ar _ tyexpr rule) =
     defdecl    = SentenceDefinition $ Definition ident binders (Just ty) expr
     fixdecl    = SentenceFixpoint $ [FixpointBody ident binders Nothing ty expr]
 
-isRecFun :: FCAT.AFuncDecl a -> Bool
-isRecFun (FCAT.AFunc fqn _ _ _ rule)  = isRecRule rule
-  where isRecRule (FCAT.ARule _ _ expr) = isRecExpr expr
-        isRecRule (FCAT.AExternal _ _)  = False
+isRecFun :: AFuncDecl a -> Bool
+isRecFun (AFunc fqn _ _ _ rule)  = isRecRule rule
+  where isRecRule (ARule _ _ expr) = isRecExpr expr
+        isRecRule (AExternal _ _)  = False
 
-        isRecExpr (FCAT.AVar _ _)       = False
-        isRecExpr (FCAT.ALit _ _)       = False
-        isRecExpr (FCAT.AComb _ _ (qn, _) es) = fqn == qn || or (map isRecExpr es)
-        isRecExpr (FCAT.ALet _ binds e)  = isRecExpr e
+        isRecExpr (AVar _ _)       = False
+        isRecExpr (ALit _ _)       = False
+        isRecExpr (AComb _ _ (qn, _) es) = fqn == qn || or (map isRecExpr es)
+        isRecExpr (ALet _ binds e)  = isRecExpr e
                                            || or (map (isRecExpr . snd) binds)
-        isRecExpr (FCAT.AFree _ _ e)     = isRecExpr e
-        isRecExpr (FCAT.AOr _ e1 e2)     = isRecExpr e1 || isRecExpr e2
-        isRecExpr (FCAT.ACase _ _ e brs) = isRecExpr e  || or (map isRecBranch brs)
-        isRecExpr (FCAT.ATyped _ e _)    = isRecExpr e
+        isRecExpr (AFree _ _ e)     = isRecExpr e
+        isRecExpr (AOr _ e1 e2)     = isRecExpr e1 || isRecExpr e2
+        isRecExpr (ACase _ _ e brs) = isRecExpr e  || or (map isRecBranch brs)
+        isRecExpr (ATyped _ e _)    = isRecExpr e
 
-        isRecBranch (FCAT.ABranch _ e) = isRecExpr e
+        isRecBranch (ABranch _ e) = isRecExpr e
 
-tRule :: FCAT.ARule a -> Term
-tRule (FCAT.ARule _ _ e) = tExpr e
-tRule (FCAT.AExternal _ _) = error "external rule not supported"
+tRule :: ARule a -> Term
+tRule (ARule _ _ e)   = tExpr e
+tRule (AExternal _ _) = error "external rule not supported"
 {-
 tExpr :: AExpr a -> PExpr a
 tExpr (AVar ty i) = PVar ty i
@@ -105,32 +105,32 @@ tLiteral (Floatc _) = error "Float literals not supported yet"
 tLiteral (Charc _)  = error "Char literals not supported yet"
 
 -}
-tyVarsOfTyExpr :: FCAT.TypeExpr -> [FCAT.TVarIndex]
-tyVarsOfTyExpr (FCAT.TVar i) = [i]
-tyVarsOfTyExpr (FCAT.FuncType dom ran) = tyVarsOfTyExpr dom ++ tyVarsOfTyExpr ran
-tyVarsOfTyExpr (FCAT.TCons _ tyexprs) = concatMap tyVarsOfTyExpr tyexprs
+tyVarsOfTyExpr :: TypeExpr -> [TVarIndex]
+tyVarsOfTyExpr (TVar i)           = [i]
+tyVarsOfTyExpr (FuncType dom ran) = tyVarsOfTyExpr dom ++ tyVarsOfTyExpr ran
+tyVarsOfTyExpr (TCons _ tyexprs)  = concatMap tyVarsOfTyExpr tyexprs
 
 
-funcTyList :: FCAT.TypeExpr ->([FCAT.TypeExpr], FCAT.TypeExpr)
+funcTyList :: TypeExpr ->([TypeExpr], TypeExpr)
 funcTyList ty = case ty of
-                  f@(FCAT.FuncType _ _) -> funcTyList' f
+                  f@(FuncType _ _) -> funcTyList' f
                   _                -> ([], ty)
 
-funcTyList' :: FCAT.TypeExpr -> ([FCAT.TypeExpr], FCAT.TypeExpr)
-funcTyList' fty@(FCAT.FuncType dom ran) =
+funcTyList' :: TypeExpr -> ([TypeExpr], TypeExpr)
+funcTyList' fty@(FuncType dom ran) =
   case fty of
-    (FCAT.FuncType f@(FCAT.FuncType _ _) _) -> ([f] ++ a, b)
-    (FCAT.FuncType _   (FCAT.FuncType _ _)) -> (x ++ a,   b)
-    (FCAT.FuncType _                _) -> (x,      ran)
+    (FuncType f@(FuncType _ _) _) -> ([f] ++ a, b)
+    (FuncType _   (FuncType _ _)) -> (x ++ a,   b)
+    (FuncType _                _) -> (x,      ran)
     _                             -> error "This should be impossible..."
   where (x,_) = funcTyList' dom
         (a,b) = funcTyList' ran
-funcTyList' tyv@(FCAT.TVar _)    = ([tyv], tyv)
-funcTyList' tyc@(FCAT.TCons _ _) = ([tyc], tyc)
+funcTyList' tyv@(TVar _)    = ([tyv], tyv)
+funcTyList' tyc@(TCons _ _) = ([tyc], tyc)
 
-varsOfRule :: FCAT.ARule a -> [FCAT.VarIndex]
-varsOfRule (FCAT.ARule _ vars _) = map fst vars
-varsOfRule (FCAT.AExternal _ _)  = []
+varsOfRule :: ARule a -> [VarIndex]
+varsOfRule (ARule _ vars _) = map fst vars
+varsOfRule (AExternal _ _)  = []
 {-
 --------------------------------------------------------------------------------
 -- Property
@@ -166,32 +166,32 @@ tProp (AFunc qn _ _ tyexpr rule) =
 --------------------------------------------------------------------------------
 -- TypeDecl
 
-tTypeDecl :: FCAT.TypeDecl -> Sentence
-tTypeDecl (FCAT.Type qn _ tvars cdecls) = SentenceInductive $ Inductive [indbody]
-  where datatype = FCAT.TCons qn (map FCAT.TVar tvars)
-        bind tv  = BinderNameType [NameIdent $ tTVarIndex tv] (TermSort Type) 
+tTypeDecl :: TypeDecl -> Sentence
+tTypeDecl (Type qn _ tvars cdecls) = SentenceInductive $ Inductive [indbody]
+  where datatype = TCons qn (map TVar tvars)
+        bind tv  = BinderNameType [NameIdent $ tTVarIndex tv] (TermSort Type)
         binders  = map bind tvars
         ctors    = map (tConsDecl datatype) cdecls
         indbody  = InductiveBody (tQName qn) binders (TermSort Type) ctors
-tTypeDecl (FCAT.TypeSyn qn _ tvars tyExpr) =
+tTypeDecl (TypeSyn qn _ tvars tyExpr) =
   SentenceDefinition $ Definition (tQName qn) binders Nothing (tTypeExpr tyExpr)
   where binders = map (BinderName . NameIdent . tTVarIndex) tvars
 
-tConsDecl :: FCAT.TypeExpr -> FCAT.ConsDecl -> InductiveCtor
-tConsDecl datatype (FCAT.Cons qn _ _ tyexprs) =
+tConsDecl :: TypeExpr -> ConsDecl -> InductiveCtor
+tConsDecl datatype (Cons qn _ _ tyexprs) =
   InductiveCtor (tQName qn) [] (Just ty)
   where ty = foldr TermFunction (tTypeExpr datatype) (map tTypeExpr tyexprs)
 
-tTypeExpr :: FCAT.TypeExpr -> Term
-tTypeExpr (FCAT.TVar i)           = TermQualId $ Ident (tTVarIndex i)
-tTypeExpr (FCAT.FuncType d r)     = TermFunction (tTypeExpr d) (tTypeExpr r)
-tTypeExpr (FCAT.TCons qn tyexprs) = TermApp (TermQualId (Ident $ tQName qn))
+tTypeExpr :: TypeExpr -> Term
+tTypeExpr (TVar i)           = TermQualId $ Ident (tTVarIndex i)
+tTypeExpr (FuncType d r)     = TermFunction (tTypeExpr d) (tTypeExpr r)
+tTypeExpr (TCons qn tyexprs) = TermApp (TermQualId (Ident $ tQName qn))
                                          (map tTypeExpr tyexprs)
 
-tTypeExprToBinder :: FCAT.TypeExpr -> Binder
+tTypeExprToBinder :: TypeExpr -> Binder
 tTypeExprToBinder ty = case ty of
-  FCAT.TVar i -> BinderName $ NameIdent (tTVarIndex i)
-  _           -> BinderNameType [] (tTypeExpr ty)
+  TVar i -> BinderName $ NameIdent (tTVarIndex i)
+  _      -> BinderNameType [] (tTypeExpr ty)
 
 --------------------------------------------------------------------------------
 -- Utility functions
