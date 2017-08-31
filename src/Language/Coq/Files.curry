@@ -17,7 +17,7 @@ flatCurryToProofCurry p = do
 tProg :: AProg a -> CoqProg a
 tProg (AProg name imports typedecls functions opdecls) =
   let ttypedecls = map tTypeDecl typedecls
-      tdefs = map tFuncDecl (filter requiredFun functions)
+      tdefs = map tFunctionDecl (filter requiredFun functions)
    in CoqProg name [] (ttypedecls ++ tdefs)
 
 
@@ -27,46 +27,52 @@ requiredFun (AFunc qn _ _ _ _) = qn `notElem`
 
 propType :: TypeExpr
 propType = TCons ("Test.Prop","Prop") []
-
+-}
 --------------------------------------------------------------------------------
 -- FuncDecl
 
 
-tFuncDecl :: AFuncDecl a -> PDecl a
-tFuncDecl fdecl = case isProp fdecl of
-                    True  -> PProperty $ tProp fdecl
-                    False -> PFuncDecl $ tFunc fdecl
+-- tFunctionDecl :: AFuncDecl a -> Sentence
+-- tFunctionDecl fdecl = case isProp fdecl of
+--                     True  -> PProperty $ tProp fdecl
+--                     False -> PFuncDecl $ tFunction fdecl
 
-tFunc :: AFuncDecl a -> PFuncDecl a
-tFunc f@(AFunc qn ar _ tyexpr rule) =
-  PFunc qn ar functype args (tTypeExpr tyexpr) (tRule rule)
-    where
-      (tys, _) = funcTyList tyexpr
-      vars     = varsOfRule rule
-      args     = zip vars (map tTypeExpr tys)
-      functype = if isRecFun f then Fixpoint else Definition
+tFunction :: FCAT.AFuncDecl a -> Sentence
+tFunction f@(FCAT.AFunc qn ar _ tyexpr rule) =
+  if isRecFun f then fixdecl else defdecl 
+  where
+    (tys, _)   = funcTyList tyexpr
+    vars       = varsOfRule rule
+    args       = zip vars (map tTypeExpr tys)
+    bind (v,t) = BinderNameType [NameIdent $ tVarIndex v] (tTypeExpr t) args
+    binders    = map bind args
+    ty         = tTypeExpr tyexpr
+    expr       = tRule rule
+    ident      = tQName qn
+    defdecl    = SentenceDefinition $ Definition ident binders (Just ty) expr
+    fixdecl    = SentenceFixpoint $ [FixpointBody ident binders Nothing ty expr]
 
-isRecFun :: AFuncDecl a -> Bool
-isRecFun (AFunc fqn _ _ _ rule)  = isRecRule rule
-  where isRecRule (ARule _ _ expr) = isRecExpr expr
-        isRecRule (AExternal _ _)  = False
+isRecFun :: FCAT.AFuncDecl a -> Bool
+isRecFun (FCAT.AFunc fqn _ _ _ rule)  = isRecRule rule
+  where isRecRule (FCAT.ARule _ _ expr) = isRecExpr expr
+        isRecRule (FCAT.AExternal _ _)  = False
 
-        isRecExpr (AVar _ _)        = False
-        isRecExpr (ALit _ _)        = False
-        isRecExpr (AComb _ _ (qn, _) es) = fqn == qn || or (map isRecExpr es)
-        isRecExpr (ALet _ binds e)  = isRecExpr e
-                                      || or (map (isRecExpr . snd) binds)
-        isRecExpr (AFree _ _ e)     = isRecExpr e
-        isRecExpr (AOr _ e1 e2)     = isRecExpr e1 || isRecExpr e2
-        isRecExpr (ACase _ _ e brs) = isRecExpr e  || or (map isRecBranch brs)
-        isRecExpr (ATyped _ e _)    = isRecExpr e
+        isRecExpr (FCAT.AVar _ _)       = False
+        isRecExpr (FCAT.ALit _ _)       = False
+        isRecExpr (FCAT.AComb _ _ (qn, _) es) = fqn == qn || or (map isRecExpr es)
+        isRecExpr (FCAT.ALet _ binds e)  = isRecExpr e
+                                           || or (map (isRecExpr . snd) binds)
+        isRecExpr (FCAT.AFree _ _ e)     = isRecExpr e
+        isRecExpr (FCAT.AOr _ e1 e2)     = isRecExpr e1 || isRecExpr e2
+        isRecExpr (FCAT.ACase _ _ e brs) = isRecExpr e  || or (map isRecBranch brs)
+        isRecExpr (FCAT.ATyped _ e _)    = isRecExpr e
 
-        isRecBranch (ABranch _ e) = isRecExpr e
+        isRecBranch (FCAT.ABranch _ e) = isRecExpr e
 
-tRule :: ARule a -> PExpr a
-tRule (ARule _ _ e) = tExpr e
-tRule (AExternal _ _) = error "external rule not supported"
-
+tRule :: FCAT.ARule a -> Term
+tRule (FCAT.ARule _ _ e) = tExpr e
+tRule (FCAT.AExternal _ _) = error "external rule not supported"
+{-
 tExpr :: AExpr a -> PExpr a
 tExpr (AVar ty i) = PVar ty i
 tExpr (ALit ty l) = PLit ty (tLiteral l)
@@ -98,34 +104,34 @@ tLiteral (Intc n) | n >= 0    = PIntc n
 tLiteral (Floatc _) = error "Float literals not supported yet"
 tLiteral (Charc _)  = error "Char literals not supported yet"
 
+-}
+tyVarsOfTyExpr :: FCAT.TypeExpr -> [FCAT.TVarIndex]
+tyVarsOfTyExpr (FCAT.TVar i) = [i]
+tyVarsOfTyExpr (FCAT.FuncType dom ran) = tyVarsOfTyExpr dom ++ tyVarsOfTyExpr ran
+tyVarsOfTyExpr (FCAT.TCons _ tyexprs) = concatMap tyVarsOfTyExpr tyexprs
 
-tyVarsOfTyExpr :: TypeExpr -> [TVarIndex]
-tyVarsOfTyExpr (TVar i) = [i]
-tyVarsOfTyExpr (FuncType dom ran) = tyVarsOfTyExpr dom ++ tyVarsOfTyExpr ran
-tyVarsOfTyExpr (TCons _ tyexprs) = concatMap tyVarsOfTyExpr tyexprs
 
-
-funcTyList :: TypeExpr ->([TypeExpr], TypeExpr)
+funcTyList :: FCAT.TypeExpr ->([FCAT.TypeExpr], FCAT.TypeExpr)
 funcTyList ty = case ty of
-                  f@(FuncType _ _) -> funcTyList' f
+                  f@(FCAT.FuncType _ _) -> funcTyList' f
                   _                -> ([], ty)
 
-funcTyList' :: TypeExpr -> ([TypeExpr], TypeExpr)
-funcTyList' fty@(FuncType dom ran) =
+funcTyList' :: FCAT.TypeExpr -> ([FCAT.TypeExpr], FCAT.TypeExpr)
+funcTyList' fty@(FCAT.FuncType dom ran) =
   case fty of
-    (FuncType f@(FuncType _ _) _) -> ([f] ++ a, b)
-    (FuncType _   (FuncType _ _)) -> (x ++ a,   b)
-    (FuncType _                _) -> (x,      ran)
+    (FCAT.FuncType f@(FCAT.FuncType _ _) _) -> ([f] ++ a, b)
+    (FCAT.FuncType _   (FCAT.FuncType _ _)) -> (x ++ a,   b)
+    (FCAT.FuncType _                _) -> (x,      ran)
     _                             -> error "This should be impossible..."
   where (x,_) = funcTyList' dom
         (a,b) = funcTyList' ran
-funcTyList' tyv@(TVar _)    = ([tyv], tyv)
-funcTyList' tyc@(TCons _ _) = ([tyc], tyc)
+funcTyList' tyv@(FCAT.TVar _)    = ([tyv], tyv)
+funcTyList' tyc@(FCAT.TCons _ _) = ([tyc], tyc)
 
-varsOfRule :: ARule a -> [VarIndex]
-varsOfRule (ARule _ vars _) = map fst vars
-varsOfRule (AExternal _ _)  = []
-
+varsOfRule :: FCAT.ARule a -> [FCAT.VarIndex]
+varsOfRule (FCAT.ARule _ vars _) = map fst vars
+varsOfRule (FCAT.AExternal _ _)  = []
+{-
 --------------------------------------------------------------------------------
 -- Property
 
