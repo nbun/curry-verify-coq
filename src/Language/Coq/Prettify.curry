@@ -100,10 +100,8 @@ pInductiveCtor :: InductiveCtor -> Doc
 pInductiveCtor (InductiveCtor id bds ty) =
     case ty of
       Just ty' ->
-        vsep [char '|' <+> pIdentifier id,
-              indent 4 (hsep (map pBinder bds) <+> colon),
-              indent 4 (pTerm ty')
-             ]
+        hang 2 (char '|' <+> pIdentifier id <+> (hsep (map pBinder bds) <+> colon)
+                <+> (pTerm ty'))
       Nothing ->
         hang 2 (char '|' <+> pIdentifier id <+> hsep (map pBinder bds))
 

@@ -1,18 +1,15 @@
-module ProofCurry.Files where
+module Language.Coq.Files where
 
-import ProofCurry.Types
-import FlatCurry.Annotated.Types hiding (QName)
-import FlatCurry.Annotated.TypeInference
-import List
-import Maybe
-import Debug
-import qualified VerifyOptions
+import           FlatCurry.Annotated.TypeInference
+import qualified FlatCurry.Annotated.Types         as FCAT
+import           Language.Coq.Syntax
 
+{-
 -- flatCurryToProofCurry :: Prog -> IO (CoqProg TypeExpr)
 flatCurryToProofCurry p = do
   res <- inferProg p
   case res of
-    Left e  -> error e               
+    Left e  -> error e
     Right p -> return $ tProg p
 
 --------------------------------------------------------------------------------
@@ -26,8 +23,8 @@ tProg (AProg name imports typedecls functions opdecls) =
 
 requiredFun :: AFuncDecl a -> Bool
 requiredFun (AFunc qn _ _ _ _) = qn `notElem`
-  [("Prelude", "apply"), ("Prelude", "failed")] 
-                                  
+  [("Prelude", "apply"), ("Prelude", "failed")]
+
 propType :: TypeExpr
 propType = TCons ("Test.Prop","Prop") []
 
@@ -48,7 +45,7 @@ tFunc f@(AFunc qn ar _ tyexpr rule) =
       vars     = varsOfRule rule
       args     = zip vars (map tTypeExpr tys)
       functype = if isRecFun f then Fixpoint else Definition
-        
+
 isRecFun :: AFuncDecl a -> Bool
 isRecFun (AFunc fqn _ _ _ rule)  = isRecRule rule
   where isRecRule (ARule _ _ expr) = isRecExpr expr
@@ -73,7 +70,7 @@ tRule (AExternal _ _) = error "external rule not supported"
 tExpr :: AExpr a -> PExpr a
 tExpr (AVar ty i) = PVar ty i
 tExpr (ALit ty l) = PLit ty (tLiteral l)
-tExpr (AComb ty ctype qn exprs) = PComb ty (tCombType ctype) qn (map tExpr exprs) 
+tExpr (AComb ty ctype qn exprs) = PComb ty (tCombType ctype) qn (map tExpr exprs)
 tExpr (ACase ty _ cexpr branches) = PMatch ty (tExpr cexpr) (map tBranch branches)
 tExpr (ALet ty binds e) = case binds of
                             [(i, be)] -> PLet ty i (tExpr be) (tExpr e)
@@ -106,7 +103,7 @@ tyVarsOfTyExpr :: TypeExpr -> [TVarIndex]
 tyVarsOfTyExpr (TVar i) = [i]
 tyVarsOfTyExpr (FuncType dom ran) = tyVarsOfTyExpr dom ++ tyVarsOfTyExpr ran
 tyVarsOfTyExpr (TCons _ tyexprs) = concatMap tyVarsOfTyExpr tyexprs
-                      
+
 
 funcTyList :: TypeExpr ->([TypeExpr], TypeExpr)
 funcTyList ty = case ty of
@@ -149,7 +146,7 @@ splitProp (ARule _ _ expr) =
                 (("Test.Prop", "always"), _) -> (Forall, head e)
                 _ -> error $ "Not supported: " ++ show qn
             _ -> error $ "Not supported: " ++ show (head es)
-        _ -> error $ "Not supported: " ++ show qn 
+        _ -> error $ "Not supported: " ++ show qn
     _ -> error $ "Not supported: " ++ show expr
 
 tProp :: AFuncDecl a -> PProperty a
@@ -159,22 +156,44 @@ tProp (AFunc qn _ _ tyexpr rule) =
       args      = zip vars (map tTypeExpr dtys)
       (quant, expr) = splitProp rule
    in PProp qn (Just quant) args (tExpr expr)
-
+-}
 --------------------------------------------------------------------------------
 -- TypeDecl
 
-tTypeDecl :: TypeDecl -> PDecl a
-tTypeDecl (Type qn _ tvars cdecls) =
-    PTypeDecl $ PInductive qn tvars (map (tConsDecl datatype) cdecls)
-        where datatype = TCons qn (map TVar tvars)
-tTypeDecl (TypeSyn qn _ tvars tyExpr) =
-    PTypeDecl $ PDefinition qn tvars (tTypeExpr tyExpr)
+tTypeDecl :: FCAT.TypeDecl -> Sentence
+tTypeDecl (FCAT.Type qn _ tvars cdecls) = SentenceInductive $ Inductive [indbody]
+  where datatype = FCAT.TCons qn (map FCAT.TVar tvars)
+        bind tv  = BinderNameType [NameIdent $ tTVarIndex tv] (TermSort Type) 
+        binders  = map bind tvars
+        ctors    = map (tConsDecl datatype) cdecls
+        indbody  = InductiveBody (tQName qn) binders (TermSort Type) ctors
+-- tTypeDecl (TypeSyn qn _ tvars tyExpr) =
+  -- PTypeDecl $ PDefinition qn tvars (tTypeExpr tyExpr)
 
-tConsDecl :: TypeExpr -> ConsDecl -> PConsDecl
-tConsDecl datatype (Cons qn ar _ tyExprs) =
-    PCons qn ar (map tTypeExpr tyExprs) (tTypeExpr datatype)
+tConsDecl :: FCAT.TypeExpr -> FCAT.ConsDecl -> InductiveCtor
+tConsDecl datatype (FCAT.Cons qn _ _ tyexprs) =
+  InductiveCtor (tQName qn) [] (Just ty)
+  where ty = foldr TermFunction (tTypeExpr datatype) (map tTypeExpr tyexprs)
 
-tTypeExpr :: TypeExpr -> PTypeExpr
-tTypeExpr (TVar i)           = PTVar i
-tTypeExpr (FuncType dom ran) = PFuncType (tTypeExpr dom) (tTypeExpr ran)
-tTypeExpr (TCons qn tyexprs) = PTCons qn (map tTypeExpr tyexprs)
+tTypeExpr :: FCAT.TypeExpr -> Term
+tTypeExpr (FCAT.TVar i)           = TermQualId $ Ident (tTVarIndex i)
+tTypeExpr (FCAT.FuncType d r)     = TermFunction (tTypeExpr d) (tTypeExpr r)
+tTypeExpr (FCAT.TCons qn tyexprs) = TermApp (TermQualId (Ident $ tQName qn))
+                                         (map tTypeExpr tyexprs)
+
+tTypeExprToBinder :: FCAT.TypeExpr -> Binder
+tTypeExprToBinder ty = case ty of
+  FCAT.TVar i -> BinderName $ NameIdent (tTVarIndex i)
+  _           -> BinderNameType [] (tTypeExpr ty)
+
+--------------------------------------------------------------------------------
+-- Utility functions
+
+-- tQName :: QName -> Identifier
+tQName (_, name) = name
+
+-- tTVarIndex :: TVarIndex -> Identifier
+tTVarIndex i = [chr (i + 65)]
+
+-- tVarIndex :: VarIndex -> Identifier
+tVarIndex i = [chr (i + 97)]
