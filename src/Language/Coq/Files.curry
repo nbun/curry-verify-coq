@@ -38,19 +38,20 @@ propType = TCons ("Test.Prop","Prop") []
 --                     False -> PFuncDecl $ tFunction fdecl
 
 tFunction :: AFuncDecl a -> Sentence
-tFunction f@(AFunc qn ar _ tyexpr rule) =
+tFunction f@(AFunc qn _ _ tyexpr rule) =
   if isRecFun f then fixdecl else defdecl
   where
     (tys, _)   = funcTyList tyexpr
     vars       = varsOfRule rule
     args       = zip vars (map tTypeExpr tys)
-    bind (v,t) = BinderNameType [NameIdent $ tVarIndex v] (tTypeExpr t) args
+    bind (v,t) = BinderNameType [NameIdent $ tVarIndex v] t
     binders    = map bind args
     ty         = tTypeExpr tyexpr
     expr       = tRule rule
     ident      = tQName qn
     defdecl    = SentenceDefinition $ Definition ident binders (Just ty) expr
-    fixdecl    = SentenceFixpoint $ [FixpointBody ident binders Nothing ty expr]
+    fixdecl    = SentenceFixpoint $
+                   Fixpoint [FixpointBody ident binders Nothing ty expr]
 
 isRecFun :: AFuncDecl a -> Bool
 isRecFun (AFunc fqn _ _ _ rule)  = isRecRule rule
@@ -72,39 +73,37 @@ isRecFun (AFunc fqn _ _ _ rule)  = isRecRule rule
 tRule :: ARule a -> Term
 tRule (ARule _ _ e)   = tExpr e
 tRule (AExternal _ _) = error "external rule not supported"
-{-
-tExpr :: AExpr a -> PExpr a
-tExpr (AVar ty i) = PVar ty i
-tExpr (ALit ty l) = PLit ty (tLiteral l)
-tExpr (AComb ty ctype qn exprs) = PComb ty (tCombType ctype) qn (map tExpr exprs)
-tExpr (ACase ty _ cexpr branches) = PMatch ty (tExpr cexpr) (map tBranch branches)
-tExpr (ALet ty binds e) = case binds of
-                            [(i, be)] -> PLet ty i (tExpr be) (tExpr e)
-                            _         -> error "ill-formed let expression"
+
+tExpr :: AExpr a -> Term
+tExpr (AVar _ i) = TermQualId $ Ident (tVarIndex i)
+tExpr (ALit _ l) = tLiteral l
+tExpr (AComb _ _ (qn, _) exprs) = TermApp f (map tExpr exprs)
+  where f = TermQualId $ Ident (tQName qn)
+tExpr (ACase _ _ cexpr branches) = TermMatch mItem Nothing (map tBranch branches)
+  where mItem = MatchItem (tExpr cexpr) Nothing Nothing
+tExpr (ALet _ binds e) = error "Let not supported yet"
+                          -- case binds of
+                            -- [(i, be)] -> PLet ty i (tExpr be) (tExpr e)
+                            -- _         -> error "ill-formed let expression"
 tExpr (AFree _ _ _) = error "Free not supported yet"
 tExpr (AOr _ _ _)   = error "Or not supported yet"
-tExpr (ATyped ty e tye) = PTyped ty (tExpr e) (tTypeExpr tye)
+tExpr (ATyped _ e tye) = error "Typed not supported yet"
 
-tBranch :: ABranchExpr a -> PBranchExpr a
-tBranch (ABranch pat expr) = PBranch (tPattern pat) (tExpr expr)
 
-tPattern :: APattern a -> PPattern a
-tPattern (APattern ty nameTy varTys) = PPattern ty nameTy varTys
-tPattern (ALPattern ty l)            = PLPattern ty (tLiteral l)
+tBranch :: ABranchExpr a -> Equation
+tBranch (ABranch pat expr) = Equation (tPattern pat) (tExpr expr)
 
-tCombType :: CombType -> PCombType
-tCombType FuncCall = PFuncCall
-tCombType ConsCall = PConsCall
-tCombType (FuncPartCall arity) = PFuncPartCall arity
-tCombType (ConsPartCall arity) = PConsPartCall arity
+tPattern :: APattern a -> Pattern
+tPattern (APattern ty (qn, _) varTys) =
+  PatCtor (Ident (tQName qn)) (map (tVarIndex . fst) varTys)
+tPattern (ALPattern ty lit)           = error "literal patern not supported yet" 
 
-tLiteral :: Literal -> PLiteral
-tLiteral (Intc n) | n >= 0    = PIntc n
-                 | otherwise = error "Negative integer literals not supported yet"
+tLiteral :: Literal -> Term
+tLiteral (Intc n) | n >= 0    = TermNum n
+                  | otherwise = error "Negative integer literals not supported yet"
 tLiteral (Floatc _) = error "Float literals not supported yet"
 tLiteral (Charc _)  = error "Char literals not supported yet"
 
--}
 tyVarsOfTyExpr :: TypeExpr -> [TVarIndex]
 tyVarsOfTyExpr (TVar i)           = [i]
 tyVarsOfTyExpr (FuncType dom ran) = tyVarsOfTyExpr dom ++ tyVarsOfTyExpr ran
@@ -169,10 +168,10 @@ tProp (AFunc qn _ _ tyexpr rule) =
 tTypeDecl :: TypeDecl -> Sentence
 tTypeDecl (Type qn _ tvars cdecls) = SentenceInductive $ Inductive [indbody]
   where datatype = TCons qn (map TVar tvars)
-        bind tv  = BinderNameType [NameIdent $ tTVarIndex tv] (TermSort Type)
+        bind tv  = BinderNameType [NameIdent $ tTVarIndex tv] (TermSort SortType)
         binders  = map bind tvars
         ctors    = map (tConsDecl datatype) cdecls
-        indbody  = InductiveBody (tQName qn) binders (TermSort Type) ctors
+        indbody  = InductiveBody (tQName qn) binders (TermSort SortType) ctors
 tTypeDecl (TypeSyn qn _ tvars tyExpr) =
   SentenceDefinition $ Definition (tQName qn) binders Nothing (tTypeExpr tyExpr)
   where binders = map (BinderName . NameIdent . tTVarIndex) tvars
@@ -196,11 +195,11 @@ tTypeExprToBinder ty = case ty of
 --------------------------------------------------------------------------------
 -- Utility functions
 
--- tQName :: QName -> Identifier
+tQName :: QName -> Identifier
 tQName (_, name) = name
 
--- tTVarIndex :: TVarIndex -> Identifier
+tTVarIndex :: TVarIndex -> Identifier
 tTVarIndex i = [chr (i + 65)]
 
--- tVarIndex :: VarIndex -> Identifier
+tVarIndex :: VarIndex -> Identifier
 tVarIndex i = [chr (i + 97)]

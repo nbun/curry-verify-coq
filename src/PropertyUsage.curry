@@ -12,7 +12,7 @@ module PropertyUsage
   )  where
 
 import FlatCurry.Types
-import Select (funcType, resultType)
+import FlatCurry.Select (funcType, resultType)
 
 ------------------------------------------------------------------------
 -- Check whether a function definition is a property,

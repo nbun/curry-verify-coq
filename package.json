@@ -8,7 +8,8 @@
         "cass-analysis": ">= 0.0.1",
         "cass"         : ">= 0.0.1",
         "currycheck"   : ">= 1.0.0",
-        "rewriting"    : ">= 0.0.1"
+        "rewriting"    : ">= 0.0.1",
+        "flatcurry-annotated" : ">= 0.0.1" 
     },
     "exportedModules": [ "ToVerifier", "VerifyOptions", "ToAgda" ],
     "configModule": "VerifyPackageConfig",
