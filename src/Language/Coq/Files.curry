@@ -1,12 +1,13 @@
 module Language.Coq.Files where
+-- module Files where
 
 import           FlatCurry.Annotated.TypeInference
 import           FlatCurry.Annotated.Types
 import           Language.Coq.Syntax
+import List
 
-{-
--- flatCurryToProofCurry :: Prog -> IO (CoqProg TypeExpr)
-flatCurryToProofCurry p = do
+-- flatCurryToCoq :: Prog -> IO Root
+flatCurryToCoq p = do
   res <- inferProg p
   case res of
     Left e  -> error e
@@ -14,11 +15,11 @@ flatCurryToProofCurry p = do
 
 --------------------------------------------------------------------------------
 
-tProg :: AProg a -> CoqProg a
+tProg :: AProg a -> Root
 tProg (AProg name imports typedecls functions opdecls) =
-  let ttypedecls = map tTypeDecl typedecls
-      tdefs = map tFunctionDecl (filter requiredFun functions)
-   in CoqProg name [] (ttypedecls ++ tdefs)
+  let ttyds = map tTypeDecl typedecls
+      tdefs      = map tFunctionDecl (filter requiredFun functions)
+   in Root $ ttyds ++ tdefs
 
 
 requiredFun :: AFuncDecl a -> Bool
@@ -27,25 +28,29 @@ requiredFun (AFunc qn _ _ _ _) = qn `notElem`
 
 propType :: TypeExpr
 propType = TCons ("Test.Prop","Prop") []
--}
+
 --------------------------------------------------------------------------------
 -- FuncDecl
 
 
--- tFunctionDecl :: AFuncDecl a -> Sentence
--- tFunctionDecl fdecl = case isProp fdecl of
---                     True  -> PProperty $ tProp fdecl
---                     False -> PFuncDecl $ tFunction fdecl
+tFunctionDecl :: AFuncDecl a -> Sentence
+tFunctionDecl fdecl = case isProp fdecl of
+                    True  -> error "prop not implemented yet" -- tProp fdecl
+                    False -> tFunction fdecl
 
 tFunction :: AFuncDecl a -> Sentence
 tFunction f@(AFunc qn _ _ tyexpr rule) =
   if isRecFun f then fixdecl else defdecl
   where
     (tys, _)   = funcTyList tyexpr
+    tyvars     = nub $ tyVarsOfTyExpr tyexpr
+    tyvbinder  = BinderNameType (map (NameIdent . tTVarIndex) tyvars)
+                                (TermSort SortType)
     vars       = varsOfRule rule
     args       = zip vars (map tTypeExpr tys)
     bind (v,t) = BinderNameType [NameIdent $ tVarIndex v] t
-    binders    = map bind args
+    binders    = if null tyvars then map bind args
+                                else tyvbinder : map bind args
     ty         = tTypeExpr tyexpr
     expr       = tRule rule
     ident      = tQName qn
@@ -77,8 +82,10 @@ tRule (AExternal _ _) = error "external rule not supported"
 tExpr :: AExpr a -> Term
 tExpr (AVar _ i) = TermQualId $ Ident (tVarIndex i)
 tExpr (ALit _ l) = tLiteral l
-tExpr (AComb _ _ (qn, _) exprs) = TermApp f (map tExpr exprs)
-  where f = TermQualId $ Ident (tQName qn)
+tExpr (AComb _ _ (qn, _) exprs) = case qn of
+  ("Prelude", "apply") -> TermApp (tExpr $ head exprs) (map tExpr $ tail exprs)
+  _                    -> TermApp f (map tExpr exprs)
+    where f = TermQualId $ Ident (tQName qn)
 tExpr (ACase _ _ cexpr branches) = TermMatch mItem Nothing (map tBranch branches)
   where mItem = MatchItem (tExpr cexpr) Nothing Nothing
 tExpr (ALet _ binds e) = error "Let not supported yet"
@@ -89,14 +96,13 @@ tExpr (AFree _ _ _) = error "Free not supported yet"
 tExpr (AOr _ _ _)   = error "Or not supported yet"
 tExpr (ATyped _ e tye) = error "Typed not supported yet"
 
-
 tBranch :: ABranchExpr a -> Equation
 tBranch (ABranch pat expr) = Equation (tPattern pat) (tExpr expr)
 
 tPattern :: APattern a -> Pattern
 tPattern (APattern ty (qn, _) varTys) =
   PatCtor (Ident (tQName qn)) (map (tVarIndex . fst) varTys)
-tPattern (ALPattern ty lit)           = error "literal patern not supported yet" 
+tPattern (ALPattern ty lit)           = error "literal patern not supported yet"
 
 tLiteral :: Literal -> Term
 tLiteral (Intc n) | n >= 0    = TermNum n
@@ -130,14 +136,14 @@ funcTyList' tyc@(TCons _ _) = ([tyc], tyc)
 varsOfRule :: ARule a -> [VarIndex]
 varsOfRule (ARule _ vars _) = map fst vars
 varsOfRule (AExternal _ _)  = []
-{-
+
 --------------------------------------------------------------------------------
 -- Property
 
 
 isProp :: AFuncDecl a -> Bool
 isProp (AFunc _ _ _ tyexpr _) = (snd $ funcTyList tyexpr) == propType
-
+{-
 splitProp :: ARule a -> (Quantifier, AExpr a)
 splitProp (AExternal _ _)  = error "External function in prop found"
 splitProp (ARule _ _ expr) =

@@ -1,13 +1,13 @@
 module Language.Coq.Prettify where
 
-import Language.Coq.Syntax
-import Pretty
+import           Language.Coq.Syntax
+import           Pretty
 
 pIdentifier :: Identifier -> Doc
 pIdentifier = text
 
 pRoot :: Root -> Doc
-pRoot (Root ss) = vsep (map pSentence ss) $$ empty
+pRoot (Root ss) = vsepBlank (map pSentence ss) $$ empty
 
 pSentence :: Sentence -> Doc
 pSentence s = case s of
@@ -175,9 +175,9 @@ pPattern (PatCtor id fields) =
     hsep (pQualId id : map pIdentifier fields)
 
 pSort :: Sort -> Doc
-pSort Prop = text "Prop"
-pSort Set  = text "Set"
-pSort Type = text "Type"
+pSort SortProp = text "Prop"
+pSort SortSet  = text "Set"
+pSort SortType = text "Type"
 
 pAssertion :: Assertion -> Doc
 pAssertion (Assertion kw id bds ty) =
