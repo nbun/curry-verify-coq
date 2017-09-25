@@ -1,19 +1,17 @@
 module Language.Coq.Files where
--- module Files where
 
 import           FlatCurry.Annotated.TypeInference
 import           FlatCurry.Annotated.Types
+import qualified FlatCurry.Types
 import           Language.Coq.Syntax
-import List
+import           List
 
--- flatCurryToCoq :: Prog -> IO Root
+flatCurryToCoq :: FlatCurry.Types.Prog -> IO Root
 flatCurryToCoq p = do
   res <- inferProg p
   case res of
     Left e  -> error e
     Right p -> return $ tProg p
-
---------------------------------------------------------------------------------
 
 tProg :: AProg a -> Root
 tProg (AProg name imports typedecls functions opdecls) =
@@ -35,7 +33,7 @@ propType = TCons ("Test.Prop","Prop") []
 
 tFunctionDecl :: AFuncDecl a -> Sentence
 tFunctionDecl fdecl = case isProp fdecl of
-                    True  -> error "prop not implemented yet" -- tProp fdecl
+                    True  -> tProp fdecl
                     False -> tFunction fdecl
 
 tFunction :: AFuncDecl a -> Sentence
@@ -57,6 +55,19 @@ tFunction f@(AFunc qn _ _ tyexpr rule) =
     defdecl    = SentenceDefinition $ Definition ident binders (Just ty) expr
     fixdecl    = SentenceFixpoint $
                    Fixpoint [FixpointBody ident binders Nothing ty expr]
+
+toBinders :: FlatCurry.Types.TypeExpr -> ARule a -> [Binder]
+toBinders ty r = binders
+  where
+    (tys, _)   = funcTyList ty
+    tyvars     = nub $ tyVarsOfTyExpr ty
+    tyvbinder  = BinderNameType (map (NameIdent . tTVarIndex) tyvars)
+                                (TermSort SortType)
+    vars       = varsOfRule r
+    args       = zip vars (map tTypeExpr tys)
+    bind (v,t) = BinderNameType [NameIdent $ tVarIndex v] t
+    binders    = if null tyvars then map bind args
+                                else tyvbinder : map bind args
 
 isRecFun :: AFuncDecl a -> Bool
 isRecFun (AFunc fqn _ _ _ rule)  = isRecRule rule
@@ -140,34 +151,32 @@ varsOfRule (AExternal _ _)  = []
 --------------------------------------------------------------------------------
 -- Property
 
-
 isProp :: AFuncDecl a -> Bool
 isProp (AFunc _ _ _ tyexpr _) = (snd $ funcTyList tyexpr) == propType
-{-
-splitProp :: ARule a -> (Quantifier, AExpr a)
-splitProp (AExternal _ _)  = error "External function in prop found"
-splitProp (ARule _ _ expr) =
-  case expr of
-    AComb _ _ qn es ->
-      case qn of
-        (("Prelude","apply"), _) ->
-          case es of
-            (AComb _ FuncCall qn' []) : e ->
-              case qn' of
-                (("Test.Prop", "always"), _) -> (Forall, head e)
-                _ -> error $ "Not supported: " ++ show qn
-            _ -> error $ "Not supported: " ++ show (head es)
-        _ -> error $ "Not supported: " ++ show qn
-    _ -> error $ "Not supported: " ++ show expr
 
-tProp :: AFuncDecl a -> PProperty a
-tProp (AFunc qn _ _ tyexpr rule) =
-  let (dtys, _) = funcTyList tyexpr
-      vars      = varsOfRule rule
-      args      = zip vars (map tTypeExpr dtys)
-      (quant, expr) = splitProp rule
-   in PProp qn (Just quant) args (tExpr expr)
--}
+tPropRule :: TypeExpr -> ARule a -> Term
+tPropRule _  (AExternal _ _)    = error "External function in prop found"
+tPropRule ty r@(ARule _ _ expr) =
+   case expr of
+     AComb _ _ qn es ->
+       case qn of
+         (("Prelude","apply"), _) ->
+           case es of
+             (AComb _ FuncCall qn' []) : e ->
+               case qn' of
+                 (("Test.Prop", "always"), _) -> TermForall (toBinders ty r)
+                                                            (tExpr $ head e)
+                 _ -> error $ "1 Not supported: " ++ show qn
+             _ -> error $ "2 Not supported: " ++ show (head es)
+         (("Test.Prop", "always"), _) -> TermForall (toBinders ty r)
+                                                    (tExpr $ head es)
+         _ -> error $ "3 Not supported: " ++ show qn
+     _ -> error $ "4 Not supported: " ++ show expr
+
+tProp :: AFuncDecl a -> Sentence
+tProp (AFunc qn _ _ tyexpr rule) = SentenceAssertionProof ass (ProofQed [])
+  where ass = Assertion AssTheorem (tQName qn) [] (tPropRule tyexpr rule)
+
 --------------------------------------------------------------------------------
 -- TypeDecl
 

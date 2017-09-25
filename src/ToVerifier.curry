@@ -103,7 +103,7 @@ generateTheorem opts qpropname = do
   writeFile "alltypes" $ show alltypes
   case optTarget opts of
     --"agda" -> theoremToAgda newopts qpropname allfuncs alltypes
-    "coq"  -> theoremToCoq  newopts qpropname allfuncs alltypes
+    "coq"  -> theoremToCoq newopts qpropname allfuncs alltypes alltypenames
     t      -> error $ "Unknown translation target: " ++ t
 
 -------------------------------------------------------------------------
