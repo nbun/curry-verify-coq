@@ -49,7 +49,7 @@ tFunction f@(AFunc qn _ _ tyexpr rule) =
     bind (v,t) = BinderNameType [NameIdent $ tVarIndex v] t
     binders    = if null tyvars then map bind args
                                 else tyvbinder : map bind args
-    ty         = tTypeExpr tyexpr
+    ty         = tTypeExpr (snd $ funcTyList tyexpr)
     expr       = tRule rule
     ident      = tQName qn
     defdecl    = SentenceDefinition $ Definition ident binders (Just ty) expr
