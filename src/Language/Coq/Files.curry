@@ -164,14 +164,15 @@ tPropRule ty r@(ARule _ _ expr) =
            case es of
              (AComb _ FuncCall qn' []) : e ->
                case qn' of
-                 (("Test.Prop", "always"), _) -> TermForall (toBinders ty r)
-                                                            (tExpr $ head e)
+                 (("Test.Prop", "always"), _) ->
+                   TermForall (toBinders ty r) (TermEq (tExpr $ head e) true)
                  _ -> error $ "1 Not supported: " ++ show qn
              _ -> error $ "2 Not supported: " ++ show (head es)
          (("Test.Prop", "always"), _) -> TermForall (toBinders ty r)
-                                                    (tExpr $ head es)
+                                                    (TermEq (tExpr $ head es) true)
          _ -> error $ "3 Not supported: " ++ show qn
      _ -> error $ "4 Not supported: " ++ show expr
+  where true =  TermQualId $ Ident "true"
 
 tProp :: AFuncDecl a -> Sentence
 tProp (AFunc qn _ _ tyexpr rule) = SentenceAssertionProof ass (ProofQed [])
@@ -211,7 +212,11 @@ tTypeExprToBinder ty = case ty of
 -- Utility functions
 
 tQName :: QName -> Identifier
-tQName (_, name) = name
+tQName (_, name) = case name of
+                     "Bool"  -> "bool"
+                     "True"  -> "true"
+                     "False" -> "false"
+                     _       -> name
 
 tTVarIndex :: TVarIndex -> Identifier
 tTVarIndex i = [chr (i + 65)]
