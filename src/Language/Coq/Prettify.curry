@@ -138,9 +138,10 @@ pQualId :: QualId -> Doc
 pQualId (Ident id) = pIdentifier id
 
 pTerm :: Term -> Doc
-pTerm t = case t of
+pTerm t = pTerm' 0 t
+pTerm' d t = let pTm = pTerm' (d + 1) in case t of
   TermApp fun args ->
-    parens $ foldl (<+>) (pTerm fun) (map pTerm args)
+    parensIf (d > 0) $ foldl (<+>) (pTm fun) (map pTm args)
   TermNum num   -> text (show num)
   TermQualId id -> pQualId id
   TermSort srt  -> pSort srt
@@ -155,12 +156,12 @@ pTerm t = case t of
       , text "end"
       ]
   TermFunction source target ->
-    pTerm source <+> text "->" <+> pTerm target
+    pTm source <+> text "->" <+> pTm target
   TermForall bds tm -> parens $
     hsep ([ text "forall" ] ++ map pBinder bds ++ [ char ',' ]) $$
-    indent 2 (pTerm tm)
-  TermAnd tms -> vsep (punctuate (text " /\\ ") (map pTerm tms))
-  TermEq l r -> pTerm l <+> char '=' $$ pTerm r
+    indent 2 (pTm tm)
+  TermAnd tms -> vsep (punctuate (text " /\\ ") (map pTm tms))
+  TermEq l r -> pTm l <+> char '=' $$ pTm r
 
 pMatchItem :: MatchItem -> Doc
 pMatchItem (MatchItem tm mbName mbIn) =
