@@ -10,15 +10,30 @@ import qualified VerifyOptions
 theoremToCoq :: VerifyOptions.Options -> QName -> [FuncDecl] -> [TypeDecl]
              -> [QName] -> IO ()
 theoremToCoq _ (_,theoname) allfuncs alltypes alltypenames = do
-  let prog  = Prog "" (modules alltypenames) alltypes funcs []
+  let prog  = Prog "" imps alltypes funcs []
       funcs = map flattenLet allfuncs
+      imps  = map fst alltypenames
+              ++ concatMap modulesOfFunc allfuncs
   writeFile "prog" $ show prog
   coqProg <- flatCurryToCoq prog
   writeFile (theoname ++ ".v") (pPrint $ pRoot coqProg)
 
 
-modules :: [QName] -> [String]
-modules = map fst
+modulesOfFunc :: FuncDecl -> [String]
+modulesOfFunc (Func _ _ _ _ r) = modulesOfRule r
+  where modulesOfRule (External _) = []
+        modulesOfRule (Rule _ e)   = modulesOfExpr e
+
+        modulesOfExpr expr = case expr of
+          Comb _ qn es -> fst qn : concatMap modulesOfExpr es
+          Let bs exp   -> concatMap (\(_,e) -> modulesOfExpr e) bs
+                          ++ modulesOfExpr exp
+          Free _ e     -> modulesOfExpr e
+          Or e1 e2     -> modulesOfExpr e1 ++ modulesOfExpr e2
+          Case _ e bes -> modulesOfExpr e
+                          ++ concatMap (\(Branch _ exp) -> modulesOfExpr exp) bes
+          Typed e _    -> modulesOfExpr e
+          _            -> []
 
 --------------------------------------------------------------------------------
 -- FlatCurry program transformations
