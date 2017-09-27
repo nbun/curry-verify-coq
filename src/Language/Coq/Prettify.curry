@@ -3,6 +3,9 @@ module Language.Coq.Prettify where
 import           Language.Coq.Syntax
 import           Pretty
 
+($~$) :: Doc -> Doc -> Doc
+d1 $~$ d2 = align $ d1 $$ d2
+
 pIdentifier :: Identifier -> Doc
 pIdentifier = text
 
@@ -162,6 +165,11 @@ pTerm' d t = let pTm = pTerm' (d + 1) in case t of
     indent 2 (pTm tm)
   TermAnd tms -> vsep (punctuate (text " /\\ ") (map pTm tms))
   TermEq l r -> pTm l <+> char '=' $$ pTm r
+  TermLet x e e' -> inPosition $
+    hsep [text "let", pTm x, text ":=", pTm e]
+    where inPosition doc = case e of
+                             TermLet _ _ _ -> doc <+> text "in" $~$ pTm e'
+                             _             -> doc $~$ text "in" <+> pTm e'
 
 pMatchItem :: MatchItem -> Doc
 pMatchItem (MatchItem tm mbName mbIn) =

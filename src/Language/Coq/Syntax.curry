@@ -121,3 +121,4 @@ data Term = TermApp Term [Term]
           | TermAnd [Term]
           | TermEq Term Term
           | TermMatch MatchItem (Maybe Term) [Equation]
+          | TermLet Term Term Term

@@ -99,10 +99,10 @@ tExpr (AComb _ _ (qn, _) exprs) = case qn of
     where f = TermQualId $ Ident (tQName qn)
 tExpr (ACase _ _ cexpr branches) = TermMatch mItem Nothing (map tBranch branches)
   where mItem = MatchItem (tExpr cexpr) Nothing Nothing
-tExpr (ALet _ binds e) = error "Let not supported yet"
-                          -- case binds of
-                            -- [(i, be)] -> PLet ty i (tExpr be) (tExpr e)
-                            -- _         -> error "ill-formed let expression"
+tExpr (ALet _ binds e) = case binds of
+                            [((i, _), be)] -> TermLet x (tExpr be) (tExpr e)
+                              where x =  TermQualId $ Ident (tVarIndex i)
+                            _              -> error "ill-formed let expression"
 tExpr (AFree _ _ _) = error "Free not supported yet"
 tExpr (AOr _ _ _)   = error "Or not supported yet"
 tExpr (ATyped _ e tye) = error "Typed not supported yet"
