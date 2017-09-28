@@ -4,6 +4,7 @@ import FlatCurry.Types
 import Language.Coq.Files
 import Language.Coq.Prettify
 import Pretty
+import List
 
 import qualified VerifyOptions
 
@@ -12,7 +13,7 @@ theoremToCoq :: VerifyOptions.Options -> QName -> [FuncDecl] -> [TypeDecl]
 theoremToCoq _ (_,theoname) allfuncs alltypes alltypenames = do
   let prog  = Prog "" imps alltypes funcs []
       funcs = map flattenLet allfuncs
-      imps  = map fst alltypenames
+      imps  = nub $ map fst alltypenames
               ++ concatMap modulesOfFunc allfuncs
   writeFile "prog" $ show prog
   coqProg <- flatCurryToCoq prog

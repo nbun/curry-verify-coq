@@ -9,11 +9,12 @@ import           List
 flatCurryToCoq :: FlatCurry.Types.Prog -> IO Root
 flatCurryToCoq p = do
   res <- inferProg p
+  writeFile "tprog" $ show res
   case res of
     Left e  -> error e
     Right p -> return $ tProg p
 
-tProg :: AProg a -> Root
+tProg :: AProg TypeExpr -> Root
 tProg (AProg name imports typedecls functions opdecls) =
   let ttyds = map tTypeDecl typedecls
       tdefs      = map tFunctionDecl (filter requiredFun functions)
@@ -31,12 +32,12 @@ propType = TCons ("Test.Prop","Prop") []
 -- FuncDecl
 
 
-tFunctionDecl :: AFuncDecl a -> Sentence
+tFunctionDecl :: AFuncDecl TypeExpr -> Sentence
 tFunctionDecl fdecl = case isProp fdecl of
                     True  -> tProp fdecl
                     False -> tFunction fdecl
 
-tFunction :: AFuncDecl a -> Sentence
+tFunction :: AFuncDecl TypeExpr -> Sentence
 tFunction f@(AFunc qn _ _ tyexpr rule) =
   if isRecFun f then fixdecl else defdecl
   where
@@ -69,7 +70,7 @@ toBinders ty r = binders
     binders    = if null tyvars then map bind args
                                 else tyvbinder : map bind args
 
-isRecFun :: AFuncDecl a -> Bool
+isRecFun :: AFuncDecl TypeExpr -> Bool
 isRecFun (AFunc fqn _ _ _ rule)  = isRecRule rule
   where isRecRule (ARule _ _ expr) = isRecExpr expr
         isRecRule (AExternal _ _)  = False
@@ -86,17 +87,24 @@ isRecFun (AFunc fqn _ _ _ rule)  = isRecRule rule
 
         isRecBranch (ABranch _ e) = isRecExpr e
 
-tRule :: ARule a -> Term
+tRule :: ARule TypeExpr -> Term
 tRule (ARule _ _ e)   = tExpr e
 tRule (AExternal _ _) = error "external rule not supported"
 
-tExpr :: AExpr a -> Term
+tExpr :: AExpr TypeExpr -> Term
 tExpr (AVar _ i) = TermQualId $ Ident (tVarIndex i)
 tExpr (ALit _ l) = tLiteral l
-tExpr (AComb _ _ (qn, _) exprs) = case qn of
-  ("Prelude", "apply") -> TermApp (tExpr $ head exprs) (map tExpr $ tail exprs)
-  _                    -> TermApp f (map tExpr exprs)
-    where f = TermQualId $ Ident (tQName qn)
+tExpr (AComb ty ct (qn, fty) exprs) =
+  let tyvs = case ct of
+               FuncCall       -> nub $ tyVars fty
+               FuncPartCall _ -> nub $ tyVars fty
+               ConsCall       -> tyVars ty
+               ConsPartCall _ -> tyVars ty
+  in case qn of
+       ("Prelude", "apply") -> TermApp (tExpr $ head exprs)
+                                       (tyvs ++ (map tExpr $ tail exprs))
+       _                    -> TermApp f (tyvs ++ map tExpr exprs)
+         where f    = TermQualId $ Ident (tQName qn)
 tExpr (ACase _ _ cexpr branches) = TermMatch mItem Nothing (map tBranch branches)
   where mItem = MatchItem (tExpr cexpr) Nothing Nothing
 tExpr (ALet _ binds e) = case binds of
@@ -107,13 +115,17 @@ tExpr (AFree _ _ _) = error "Free not supported yet"
 tExpr (AOr _ _ _)   = error "Or not supported yet"
 tExpr (ATyped _ e tye) = error "Typed not supported yet"
 
-tBranch :: ABranchExpr a -> Equation
+tyVars :: TypeExpr -> [Term]
+tyVars t =  map (TermQualId . Ident . tTVarIndex) (tyVarsOfTyExpr t)
+
+tBranch :: ABranchExpr TypeExpr -> Equation
 tBranch (ABranch pat expr) = Equation (tPattern pat) (tExpr expr)
 
-tPattern :: APattern a -> Pattern
-tPattern (APattern ty (qn, _) varTys) =
-  PatCtor (Ident (tQName qn)) (map (tVarIndex . fst) varTys)
-tPattern (ALPattern ty lit)           = error "literal patern not supported yet"
+tPattern :: APattern TypeExpr -> Pattern
+tPattern (APattern t (qn, _) varTys) =
+  PatCtor (Ident (tQName qn)) (tyvs ++ map (tVarIndex . fst) varTys)
+  where tyvs = map (const "_") (tyVarsOfTyExpr t)
+tPattern (ALPattern _ _)             = error "literal patern not supported yet"
 
 tLiteral :: Literal -> Term
 tLiteral (Intc n) | n >= 0    = TermNum n
@@ -154,7 +166,7 @@ varsOfRule (AExternal _ _)  = []
 isProp :: AFuncDecl a -> Bool
 isProp (AFunc _ _ _ tyexpr _) = (snd $ funcTyList tyexpr) == propType
 
-tPropRule :: TypeExpr -> ARule a -> Term
+tPropRule :: TypeExpr -> ARule TypeExpr -> Term
 tPropRule _  (AExternal _ _)    = error "External function in prop found"
 tPropRule ty r@(ARule _ _ expr) =
    case expr of
@@ -174,7 +186,7 @@ tPropRule ty r@(ARule _ _ expr) =
      _ -> error $ "4 Not supported: " ++ show expr
   where true =  TermQualId $ Ident "true"
 
-tProp :: AFuncDecl a -> Sentence
+tProp :: AFuncDecl TypeExpr -> Sentence
 tProp (AFunc qn _ _ tyexpr rule) = SentenceAssertionProof ass (ProofQed [])
   where ass = Assertion AssTheorem (tQName qn) [] (tPropRule tyexpr rule)
 
