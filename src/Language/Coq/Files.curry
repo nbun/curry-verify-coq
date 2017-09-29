@@ -6,18 +6,27 @@ import qualified FlatCurry.Types
 import           Language.Coq.Syntax
 import           List
 
+
+data Env = Env
+         { funTypes :: [(QName, TypeExpr)]
+         }
+
+getFunTypes :: AProg a -> [(QName, TypeExpr)]
+getFunTypes (AProg _ _ _ fs _) = map (\(AFunc qn _ _ ty _) -> (qn, ty))
+                                     (filter requiredFun fs)
+
 flatCurryToCoq :: FlatCurry.Types.Prog -> IO Root
 flatCurryToCoq p = do
   res <- inferProg p
   writeFile "tprog" $ show res
   case res of
     Left e  -> error e
-    Right p -> return $ tProg p
+    Right p -> return $ tProg (Env $ getFunTypes p) p
 
-tProg :: AProg TypeExpr -> Root
-tProg (AProg name imports typedecls functions opdecls) =
+tProg :: Env -> AProg TypeExpr -> Root
+tProg env (AProg name imports typedecls functions opdecls) =
   let ttyds = map tTypeDecl typedecls
-      tdefs      = map tFunctionDecl (filter requiredFun functions)
+      tdefs = map (tFunctionDecl env) (filter requiredFun functions)
    in Root $ ttyds ++ tdefs
 
 
@@ -32,13 +41,13 @@ propType = TCons ("Test.Prop","Prop") []
 -- FuncDecl
 
 
-tFunctionDecl :: AFuncDecl TypeExpr -> Sentence
-tFunctionDecl fdecl = case isProp fdecl of
-                    True  -> tProp fdecl
-                    False -> tFunction fdecl
+tFunctionDecl :: Env -> AFuncDecl TypeExpr -> Sentence
+tFunctionDecl env fdecl = case isProp fdecl of
+                    True  -> tProp env fdecl
+                    False -> tFunction env fdecl
 
-tFunction :: AFuncDecl TypeExpr -> Sentence
-tFunction f@(AFunc qn _ _ tyexpr rule) =
+tFunction :: Env -> AFuncDecl TypeExpr -> Sentence
+tFunction env f@(AFunc qn _ _ tyexpr rule) =
   if isRecFun f then fixdecl else defdecl
   where
     (tys, _)   = funcTyList tyexpr
@@ -51,7 +60,7 @@ tFunction f@(AFunc qn _ _ tyexpr rule) =
     binders    = if null tyvars then map bind args
                                 else tyvbinder : map bind args
     ty         = tTypeExpr (snd $ funcTyList tyexpr)
-    expr       = tRule rule
+    expr       = tRule env rule
     ident      = tQName qn
     defdecl    = SentenceDefinition $ Definition ident binders (Just ty) expr
     fixdecl    = SentenceFixpoint $
@@ -87,39 +96,45 @@ isRecFun (AFunc fqn _ _ _ rule)  = isRecRule rule
 
         isRecBranch (ABranch _ e) = isRecExpr e
 
-tRule :: ARule TypeExpr -> Term
-tRule (ARule _ _ e)   = tExpr e
-tRule (AExternal _ _) = error "external rule not supported"
+tRule :: Env -> ARule TypeExpr -> Term
+tRule env (ARule _ _ e)   = tExpr env e
+tRule _ (AExternal _ _) = error "external rule not supported"
 
-tExpr :: AExpr TypeExpr -> Term
-tExpr (AVar _ i) = TermQualId $ Ident (tVarIndex i)
-tExpr (ALit _ l) = tLiteral l
-tExpr (AComb ty ct (qn, fty) exprs) =
-  let tyvs = case ct of
-               FuncCall       -> nub $ tyVars fty
-               FuncPartCall _ -> nub $ tyVars fty
-               ConsCall       -> tyVars ty
-               ConsPartCall _ -> tyVars ty
+tExpr :: Env -> AExpr TypeExpr -> Term
+tExpr _ (AVar _ i) = TermQualId $ Ident (tVarIndex i)
+tExpr _ (ALit _ l) = tLiteral l
+tExpr env (AComb ty ct (qn, fty) exprs) =
+  let tyvs = case (ct, lookup qn (funTypes env)) of
+               (FuncCall, Just ety)       -> map (tyVar . snd) $ unify ety fty
+               (FuncPartCall _, Just ety) -> map (tyVar . snd) $ unify ety fty
+               (ConsCall, _)              -> tyVars ty
+               (ConsPartCall _, _)        -> tyVars ty
+               _                          -> []
   in case qn of
-       ("Prelude", "apply") -> TermApp (tExpr $ head exprs)
-                                       (tyvs ++ (map tExpr $ tail exprs))
-       _                    -> TermApp f (tyvs ++ map tExpr exprs)
+       ("Prelude", "apply") -> TermApp (tExpr env $ head exprs)
+                                       (tyvs ++ (map (tExpr env) $ tail exprs))
+       _                    -> TermApp f (tyvs ++ map (tExpr env) exprs)
          where f    = TermQualId $ Ident (tQName qn)
-tExpr (ACase _ _ cexpr branches) = TermMatch mItem Nothing (map tBranch branches)
-  where mItem = MatchItem (tExpr cexpr) Nothing Nothing
-tExpr (ALet _ binds e) = case binds of
-                            [((i, _), be)] -> TermLet x (tExpr be) (tExpr e)
-                              where x =  TermQualId $ Ident (tVarIndex i)
-                            _              -> error "ill-formed let expression"
-tExpr (AFree _ _ _) = error "Free not supported yet"
-tExpr (AOr _ _ _)   = error "Or not supported yet"
-tExpr (ATyped _ e tye) = error "Typed not supported yet"
+tExpr env (ACase _ _ cexpr branches) =
+  TermMatch mItem Nothing (map (tBranch env) branches)
+    where mItem = MatchItem (tExpr env cexpr) Nothing Nothing
+tExpr env (ALet _ binds e) =
+  case binds of
+    [((i, _), be)] -> TermLet x (tExpr env be) (tExpr env e)
+      where x =  TermQualId $ Ident (tVarIndex i)
+    _              -> error "ill-formed let expression"
+tExpr _ (AFree _ _ _) = error "Free not supported yet"
+tExpr _ (AOr _ _ _)   = error "Or not supported yet"
+tExpr _ (ATyped _ e tye) = error "Typed not supported yet"
+
+tyVar :: TVarIndex -> Term
+tyVar = TermQualId . Ident . tTVarIndex
 
 tyVars :: TypeExpr -> [Term]
 tyVars t =  map (TermQualId . Ident . tTVarIndex) (tyVarsOfTyExpr t)
 
-tBranch :: ABranchExpr TypeExpr -> Equation
-tBranch (ABranch pat expr) = Equation (tPattern pat) (tExpr expr)
+tBranch :: Env -> ABranchExpr TypeExpr -> Equation
+tBranch env (ABranch pat expr) = Equation (tPattern pat) (tExpr env expr)
 
 tPattern :: APattern TypeExpr -> Pattern
 tPattern (APattern t (qn, _) varTys) =
@@ -163,12 +178,16 @@ varsOfRule (AExternal _ _)  = []
 --------------------------------------------------------------------------------
 -- Property
 
+tProp :: Env -> AFuncDecl TypeExpr -> Sentence
+tProp env (AFunc qn _ _ tyexpr rule) = SentenceAssertionProof ass (ProofQed [])
+  where ass = Assertion AssTheorem (tQName qn) [] (tPropRule env tyexpr rule)
+
 isProp :: AFuncDecl a -> Bool
 isProp (AFunc _ _ _ tyexpr _) = (snd $ funcTyList tyexpr) == propType
 
-tPropRule :: TypeExpr -> ARule TypeExpr -> Term
-tPropRule _  (AExternal _ _)    = error "External function in prop found"
-tPropRule ty r@(ARule _ _ expr) =
+tPropRule :: Env -> TypeExpr -> ARule TypeExpr -> Term
+tPropRule _ _ (AExternal _ _)    = error "External function in prop found"
+tPropRule env ty r@(ARule _ _ expr) =
    case expr of
      AComb _ _ qn es ->
        case qn of
@@ -177,19 +196,14 @@ tPropRule ty r@(ARule _ _ expr) =
              (AComb _ FuncCall qn' []) : e ->
                case qn' of
                  (("Test.Prop", "always"), _) ->
-                   TermForall (toBinders ty r) (TermEq (tExpr $ head e) true)
+                   TermForall (toBinders ty r) (TermEq (tExpr env $ head e) true)
                  _ -> error $ "1 Not supported: " ++ show qn
              _ -> error $ "2 Not supported: " ++ show (head es)
          (("Test.Prop", "always"), _) -> TermForall (toBinders ty r)
-                                                    (TermEq (tExpr $ head es) true)
+                                                (TermEq (tExpr env $ head es) true)
          _ -> error $ "3 Not supported: " ++ show qn
      _ -> error $ "4 Not supported: " ++ show expr
   where true =  TermQualId $ Ident "true"
-
-tProp :: AFuncDecl TypeExpr -> Sentence
-tProp (AFunc qn _ _ tyexpr rule) = SentenceAssertionProof ass (ProofQed [])
-  where ass = Assertion AssTheorem (tQName qn) [] (tPropRule tyexpr rule)
-
 --------------------------------------------------------------------------------
 -- TypeDecl
 
@@ -235,3 +249,11 @@ tTVarIndex i = [chr (i + 65)]
 
 tVarIndex :: VarIndex -> Identifier
 tVarIndex i = [chr (i + 97)]
+
+unify :: TypeExpr -> TypeExpr -> [(TVarIndex, TVarIndex)]
+unify t1 t2 = nubBy (\(i,_) (j,_) -> i == j) $
+  case (t1, t2) of
+    (TVar x,         TVar y)         -> [(x, y)]
+    (FuncType d1 r1, FuncType d2 r2) -> unify d1 d2 ++ unify r1 r2
+    (TCons _ ts1,    TCons _ ts2)    -> concatMap (uncurry unify) (zip ts1 ts2)
+    _                                -> error "Type error in original program"
