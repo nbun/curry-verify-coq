@@ -105,8 +105,8 @@ tExpr _ (AVar _ i) = TermQualId $ Ident (tVarIndex i)
 tExpr _ (ALit _ l) = tLiteral l
 tExpr env (AComb ty ct (qn, fty) exprs) =
   let tyvs = case (ct, lookup qn (funTypes env)) of
-               (FuncCall, Just ety)       -> map (tyVar . snd) $ unify ety fty
-               (FuncPartCall _, Just ety) -> map (tyVar . snd) $ unify ety fty
+               (FuncCall, Just ety)       -> map (tTypeExpr . snd) $ unify ety fty
+               (FuncPartCall _, Just ety) -> map (tTypeExpr . snd) $ unify ety fty
                (ConsCall, _)              -> tyVars ty
                (ConsPartCall _, _)        -> tyVars ty
                _                          -> []
@@ -195,15 +195,21 @@ tPropRule env ty r@(ARule _ _ expr) =
            case es of
              (AComb _ FuncCall qn' []) : e ->
                case qn' of
-                 (("Test.Prop", "always"), _) ->
-                   TermForall (toBinders ty r) (TermEq (tExpr env $ head e) true)
-                 _ -> error $ "1 Not supported: " ++ show qn
-             _ -> error $ "2 Not supported: " ++ show (head es)
-         (("Test.Prop", "always"), _) -> TermForall (toBinders ty r)
-                                                (TermEq (tExpr env $ head es) true)
-         _ -> error $ "3 Not supported: " ++ show qn
-     _ -> error $ "4 Not supported: " ++ show expr
-  where true =  TermQualId $ Ident "true"
+                 (("Test.Prop", "always"), _) -> toEq ty r env e
+                 _ -> err qn'
+             _ -> err qn
+         (("Test.Prop", "always"), _) -> toEq ty r env es
+         _ -> err qn
+     _ -> err expr
+  where true    =  TermQualId $ Ident "true"
+        err x   = error $"Prop type not supported: " ++ show x
+        toEq ty r env es =
+          case head es of
+            AComb _ FuncCall (("Prelude", "=="), _) (x:y:[]) ->
+              TermForall (toBinders ty r) (TermEq (tExpr env x) (tExpr env y))
+            _ ->
+              TermForall (toBinders ty r) (TermEq (tExpr env $ head es) true)
+
 --------------------------------------------------------------------------------
 -- TypeDecl
 
@@ -242,6 +248,9 @@ tQName (_, name) = case name of
                      "Bool"  -> "bool"
                      "True"  -> "true"
                      "False" -> "false"
+                     "Nat"   -> "nat"
+                     "S"     -> "S"
+                     "Z"     -> "O"
                      _       -> name
 
 tTVarIndex :: TVarIndex -> Identifier
@@ -250,10 +259,22 @@ tTVarIndex i = [chr (i + 65)]
 tVarIndex :: VarIndex -> Identifier
 tVarIndex i = [chr (i + 97)]
 
-unify :: TypeExpr -> TypeExpr -> [(TVarIndex, TVarIndex)]
+unify :: TypeExpr -> TypeExpr -> [(TVarIndex, TypeExpr)]
 unify t1 t2 = nubBy (\(i,_) (j,_) -> i == j) $
   case (t1, t2) of
-    (TVar x,         TVar y)         -> [(x, y)]
+    (TVar x,         t)         -> [(x, t)]
     (FuncType d1 r1, FuncType d2 r2) -> unify d1 d2 ++ unify r1 r2
     (TCons _ ts1,    TCons _ ts2)    -> concatMap (uncurry unify) (zip ts1 ts2)
-    _                                -> error "Type error in original program"
+    _                                -> error $ "Type error in original program: "
+                                                ++ show t1 ++ " <> " ++ show t2
+
+typeOf :: AExpr a -> a
+typeOf e = case e of
+           AVar a _ -> a
+           ALit a _ -> a
+           AComb a _ _ _ -> a
+           ALet a _ _ -> a
+           AFree a _ _ -> a
+           AOr a _ _ -> a
+           ACase a _ _ _ -> a
+           ATyped a _ _ -> a 
